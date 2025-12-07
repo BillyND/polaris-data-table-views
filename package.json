@@ -1,6 +1,6 @@
 {
   "name": "polaris-list-table",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "A complete data table component for Shopify Polaris with filtering, sorting, pagination and URL sync. Integrates with mongoose-url-query.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
