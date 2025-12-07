@@ -1,243 +1,460 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useUrlParams } from './useUrlParams';
-import { debounce } from '../utils/helpers';
-import type {
-  UseDataSourceOptions,
-  UseDataSourceReturn,
-  QueryState,
-  QueryResult,
-  FilterValue,
-  SortDefinition,
-  ViewDefinition,
-} from '../types';
-import { buildUrl, objectToFilters, parseUrlParams, serializeToUrlParams } from '../utils/buildUrl';
-import {
-  sortToPolaris,
-  polarisToSort,
-  filterItemsLocally,
-  areFiltersEmpty,
-} from '../utils/filters';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { useSetIndexFiltersMode } from '@shopify/polaris';
+import { TABLE_ITEM_LIST_LIMITATION } from '../constants';
+import { defaultFetch } from '../utils/defaultFetch';
+import { buildQueryUrl } from 'mongoose-url-query';
+import lodash from 'lodash';
+import type { IndexFiltersProps } from '@shopify/polaris';
+import { usePagination } from './usePagination';
 
-// Cache for abort controllers
-const abortControllers: Record<string, AbortController> = {};
+export type SortDefinition = {
+  field: string;
+  direction: 'asc' | 'desc';
+};
 
-/**
- * Default fetch function
- */
-async function defaultFetch(url: string, options?: RequestInit): Promise<unknown> {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-  return response.json();
+export type ViewDefinition = {
+  _id?: string;
+  name: string;
+  filters: {
+    queryValue?: string;
+    [key: string]: any;
+  };
+};
+
+export type QueryResult<T> = {
+  items: T[];
+  total: number;
+  page?: number;
+};
+
+export type QueryState = {
+  page: number;
+  limit: number;
+  sort: string[] | undefined;
+  filterValues: {
+    queryValue?: string;
+    [key: string]: string | any[] | undefined;
+  };
+  viewSelected: string | null;
+};
+
+export interface UseDataSourceOptions<T> {
+  endpoint: string;
+  queryKey: string;
+  defaultSort?: SortDefinition;
+  defaultLimit?: number;
+  defaultViews?: ViewDefinition[];
+  syncWithUrl?: boolean;
+  localData?: T[];
+  abbreviated?: boolean;
+  transformResponse?: (response: unknown) => QueryResult<T>;
+  fetchFn?: (url: string, options?: RequestInit) => Promise<unknown>;
+  debounceMs?: number;
 }
 
-/**
- * Default response transformer
- */
-function defaultTransformResponse<T>(response: unknown): QueryResult<T> {
-  const data = response as Record<string, unknown>;
-  return {
-    items: (data.items as T[]) || [],
-    total: (data.total as number) || 0,
-    page: (data.page as number) || 1,
+export interface UseDataSourceReturn<T> {
+  // State
+  state: QueryState;
+  items: T[];
+  total: number;
+  loading: boolean;
+  firstLoad: boolean;
+  error: Error | null;
+
+  // Actions
+  setPage: (page: number) => void;
+  setQueryValue: (value: string) => void;
+  setFilter: (key: string, value: any) => void;
+  setFilters: (filters: Record<string, any>) => void;
+  clearFilters: () => void;
+  setSort: (sort: SortDefinition | null) => void;
+  setSelectedView: (index: number) => void;
+  refresh: () => void;
+
+  // Polaris helpers
+  tabs: IndexFiltersProps['tabs'];
+  sortOptions: IndexFiltersProps['sortOptions'];
+  sortSelected: string[];
+  onSort: (selected: string[]) => void;
+
+  // Pagination helpers
+  pagination: {
+    page: number;
+    totalPages: number;
+    hasPrevious: boolean;
+    hasNext: boolean;
+    onPrevious: () => void;
+    onNext: () => void;
+    goToPage: (page: number) => void;
+    label: string;
   };
 }
 
+// Cache for timers and abort controllers
+const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+const aborters: Record<string, AbortController> = {};
+
 /**
- * Hook for managing data source with Polaris integration
- *
- * @example
- * ```tsx
- * const {
- *   items,
- *   loading,
- *   total,
- *   state,
- *   setQueryValue,
- *   setFilter,
- *   setPage,
- *   tabs,
- *   sortOptions,
- *   sortSelected,
- *   onSort,
- * } = useDataSource({
- *   endpoint: "/api/products",
- *   queryKey: "name",
- *   defaultSort: { field: "createdAt", direction: "desc" },
- *   defaultLimit: 20,
- *   syncWithUrl: true,
- * });
- * ```
+ * Hook for managing data source with filtering, sorting, and pagination
  */
-export function useDataSource<T = unknown>(
-  options: UseDataSourceOptions<T>
-): UseDataSourceReturn<T> {
-  const {
-    endpoint,
-    queryKey,
-    defaultSort = null,
-    defaultLimit = 50,
-    defaultViews = [],
-    syncWithUrl = true,
-    localData,
-    abbreviated,
-    transformResponse = defaultTransformResponse,
-    fetchFn = defaultFetch,
-    debounceMs = 300,
-  } = options;
+export function useDataSource<T = any>({
+  endpoint,
+  queryKey,
+  defaultSort,
+  defaultLimit = TABLE_ITEM_LIST_LIMITATION,
+  defaultViews = [],
+  syncWithUrl = true,
+  localData,
+  abbreviated,
+  transformResponse,
+  fetchFn = defaultFetch,
+  debounceMs = 300,
+}: UseDataSourceOptions<T>): UseDataSourceReturn<T> {
+  const limit = defaultLimit;
 
-  const [searchParams, setSearchParams] = useUrlParams();
-  const isInitialMount = useRef(true);
-  const refreshCounter = useRef(0);
-
-  // Initialize state from URL or defaults
-  const getInitialState = useCallback((): QueryState => {
-    if (syncWithUrl) {
-      const parsed = parseUrlParams(searchParams);
-      const viewIndex = parsed.viewSelected
-        ? defaultViews.findIndex(
-            (v) => v.name === parsed.viewSelected || v.id === parsed.viewSelected
-          )
-        : 0;
-
-      return {
-        page: parsed.page,
-        limit: defaultLimit,
-        queryValue: parsed.queryValue,
-        filters: parsed.filters,
-        sort: parsed.sort || defaultSort,
-        selectedView: Math.max(0, viewIndex),
-      };
+  // Convert defaultSort to string array format
+  const getDefaultSort = useCallback(() => {
+    if (defaultSort) {
+      return [`${defaultSort.field} ${defaultSort.direction}`];
     }
+    return undefined;
+  }, [defaultSort]);
 
-    return {
-      page: 1,
-      limit: defaultLimit,
-      queryValue: '',
-      filters: {},
-      sort: defaultSort,
-      selectedView: 0,
-    };
-  }, [searchParams, syncWithUrl, defaultLimit, defaultSort, defaultViews]);
+  // URL param handling
+  const getSearchParams = useCallback(() => {
+    if (typeof window === 'undefined' || !syncWithUrl) return new URLSearchParams();
+    return new URLSearchParams(window.location.search);
+  }, [syncWithUrl]);
 
-  const [state, setState] = useState<QueryState>(getInitialState);
-  const [items, setItems] = useState<T[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [firstLoad, setFirstLoad] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  // Views/Tabs
-  const views = useMemo<ViewDefinition[]>(
-    () => [{ name: 'All', filters: {} }, ...defaultViews],
-    [defaultViews]
+  const updateSearchParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      if (typeof window === 'undefined' || !syncWithUrl) return;
+      const searchParams = new URLSearchParams(window.location.search);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null) {
+          searchParams.delete(key);
+        } else {
+          searchParams.set(key, value);
+        }
+      });
+      const newUrl = `${window.location.pathname}${
+        searchParams.toString() ? `?${searchParams.toString()}` : ''
+      }`;
+      window.history.replaceState({}, '', newUrl);
+    },
+    [syncWithUrl]
   );
 
-  // Sync state to URL
-  const syncToUrl = useCallback(() => {
-    if (!syncWithUrl) return;
+  const getPageFromUrl = useCallback(() => {
+    if (!syncWithUrl) return 1;
+    const pageParam = getSearchParams().get('page');
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  }, [getSearchParams, syncWithUrl]);
 
-    setSearchParams((prev) => {
-      return serializeToUrlParams(
-        {
-          ...state,
-          viewSelected: views[state.selectedView]?.name || null,
-        },
-        prev
-      );
+  const getSortFromUrl = useCallback(() => {
+    if (!syncWithUrl) return getDefaultSort();
+    const sortParam = getSearchParams().get('sort');
+    if (sortParam) {
+      return [sortParam.replace('|', ' ')];
+    }
+    return getDefaultSort();
+  }, [getSearchParams, getDefaultSort, syncWithUrl]);
+
+  const getFiltersFromUrl = useCallback(() => {
+    if (!syncWithUrl) return { queryValue: '' };
+    const searchParams = getSearchParams();
+    const filters: Record<string, any> = {};
+
+    const queryParam = searchParams.get('query');
+    if (queryParam) {
+      filters.queryValue = decodeURIComponent(queryParam);
+    }
+
+    searchParams.forEach((value, key) => {
+      if (key.startsWith('filter_')) {
+        const filterKey = key.replace('filter_', '');
+        try {
+          const parsedValue = JSON.parse(value);
+          filters[filterKey] = parsedValue;
+        } catch {
+          filters[filterKey] = decodeURIComponent(value);
+        }
+      }
     });
-  }, [syncWithUrl, state, views, setSearchParams]);
 
-  // Debounced URL sync
+    return filters;
+  }, [getSearchParams, syncWithUrl]);
+
+  // State initialization
+  const [page, setPageState] = useState<number>(getPageFromUrl());
+  const [items, setItems] = useState<T[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [sort, setSortState] = useState<string[] | undefined>(getSortFromUrl());
+  const [loading, setLoading] = useState<boolean>(true);
+  const [firstLoad, setFirstLoad] = useState<boolean>(true);
+  const [filterValues, setFilterValuesState] = useState<Record<string, any>>(getFiltersFromUrl());
+  const [viewSelected, setViewSelectedState] = useState<string | null>(
+    syncWithUrl ? getSearchParams().get('viewSelected') : null
+  );
+  const [error, setError] = useState<Error | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const isInitialMount = useRef(true);
+
+  // Unified function to update URL search params from current state
+  const updateSearchParamsFromState = useCallback(() => {
+    if (!syncWithUrl) return;
+    const updates: Record<string, string | null> = {};
+
+    if (page > 1) {
+      updates.page = page.toString();
+    } else {
+      updates.page = null;
+    }
+
+    if (sort?.length) {
+      updates.sort = sort[0].replace(' ', '|');
+    } else {
+      updates.sort = null;
+    }
+
+    if (filterValues.queryValue) {
+      updates.query = encodeURIComponent(filterValues.queryValue);
+    } else {
+      updates.query = null;
+    }
+
+    if (viewSelected) {
+      updates.viewSelected = viewSelected;
+    } else {
+      updates.viewSelected = null;
+    }
+
+    const currentParams = getSearchParams();
+    currentParams.forEach((_, key) => {
+      if (key.startsWith('filter_')) {
+        updates[key] = null;
+      }
+    });
+
+    Object.entries(filterValues).forEach(([key, value]) => {
+      if (key !== 'queryValue' && value !== undefined && value !== '') {
+        if (Array.isArray(value) && value.length > 0) {
+          updates[`filter_${key}`] = JSON.stringify(value);
+        } else if (typeof value === 'string' && value) {
+          updates[`filter_${key}`] = encodeURIComponent(value);
+        }
+      }
+    });
+
+    updateSearchParams(updates);
+  }, [page, sort, filterValues, viewSelected, getSearchParams, updateSearchParams, syncWithUrl]);
+
+  // Watch state changes and update URL params (debounced)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
 
-    const debouncedSync = debounce(syncToUrl, 100);
-    debouncedSync();
+    const debouncedUpdate = lodash.debounce(() => {
+      updateSearchParamsFromState();
+    }, 100);
 
-    return () => debouncedSync.cancel();
-  }, [state, syncToUrl]);
+    debouncedUpdate();
 
-  // Abort previous request
-  const abortRequest = useCallback(() => {
-    if (abortControllers[endpoint]) {
-      abortControllers[endpoint].abort();
-      delete abortControllers[endpoint];
+    return () => {
+      debouncedUpdate.cancel();
+    };
+  }, [page, sort, filterValues, viewSelected, updateSearchParamsFromState]);
+
+  // Sync URL changes back to component state (only on mount)
+  useEffect(() => {
+    if (!syncWithUrl) return;
+    const urlPage = getPageFromUrl();
+    const urlSort = getSortFromUrl();
+    const urlFilters = getFiltersFromUrl();
+    const urlViewSelected = getSearchParams().get('viewSelected');
+
+    setPageState((prev) => (urlPage === prev ? prev : urlPage));
+    setSortState((prev) => (JSON.stringify(urlSort) === JSON.stringify(prev) ? prev : urlSort));
+    setFilterValuesState((prev) =>
+      JSON.stringify(urlFilters) === JSON.stringify(prev) ? prev : urlFilters
+    );
+    setViewSelectedState(urlViewSelected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Abort ongoing requests
+  const abortRequest = useCallback((dataSource: string) => {
+    if (aborters[dataSource]) {
+      aborters[dataSource].abort();
+      delete aborters[dataSource];
     }
-  }, [endpoint]);
 
-  // Fetch data from API
-  const fetchRemoteData = useCallback(async (): Promise<QueryResult<T> | null> => {
-    abortRequest();
+    if (timers[dataSource]) {
+      clearTimeout(timers[dataSource]);
+      delete timers[dataSource];
+    }
+  }, []);
 
-    const controller = new AbortController();
-    abortControllers[endpoint] = controller;
+  // Handles local data filtering and sorting
+  const handleLocalData = useCallback(() => {
+    if (!localData) return { items: [], total: 0 };
+    const { queryValue, ...otherFilters } = filterValues;
+    let filteredItems = [...localData];
 
-    try {
-      const url = buildUrl({
-        baseUrl: endpoint,
-        page: state.page,
-        limit: state.limit,
-        sort: state.sort,
-        filters: objectToFilters(state.filters),
-        query: state.queryValue ? { field: queryKey, value: state.queryValue } : undefined,
-        abbreviated,
-      });
+    if (queryValue) {
+      filteredItems = filteredItems.filter((item: any) =>
+        item[queryKey]?.toString().toLowerCase().includes(queryValue.toLowerCase())
+      );
+    }
 
-      const response = await fetchFn(url, { signal: controller.signal });
-      return transformResponse(response) as QueryResult<T>;
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        return null;
+    Object.entries(otherFilters).forEach(([filterKey, filterValue]) => {
+      if (Array.isArray(filterValue) && filterValue.length) {
+        filteredItems = filteredItems.filter((item: any) => filterValue.includes(item[filterKey]));
+      } else if (typeof filterValue === 'string' && filterValue) {
+        filteredItems = filteredItems.filter((item: any) =>
+          item[filterKey]?.toString().toLowerCase().includes(filterValue.toLowerCase())
+        );
       }
-      throw err;
+    });
+
+    if (sort?.[0]) {
+      const [key, order] = sort[0].split(' ');
+      const isAsc = order === 'asc';
+
+      filteredItems = filteredItems.sort((a: any, b: any) => {
+        const aValue = key === 'createdAt' ? new Date(a[key]).getTime() : a[key];
+        const bValue = key === 'createdAt' ? new Date(b[key]).getTime() : b[key];
+
+        if (aValue === undefined && bValue === undefined) return 0;
+        if (aValue === undefined) return isAsc ? 1 : -1;
+        if (bValue === undefined) return isAsc ? -1 : 1;
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return isAsc ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        }
+
+        return isAsc ? aValue - bValue : bValue - aValue;
+      });
     }
+
+    const startIndex = (page - 1) * limit;
+    const paginatedItems = filteredItems.slice(startIndex, startIndex + limit);
+
+    return { items: paginatedItems, total: filteredItems.length };
+  }, [localData, filterValues, queryKey, sort, page, limit]);
+
+  // Handles remote data fetching
+  const handleRemoteData = useCallback(async () => {
+    if (!endpoint) return { items: [], total: 0 };
+    abortRequest(endpoint);
+
+    return new Promise<{ items: T[]; total: number } | null>((resolve) => {
+      timers[endpoint] = setTimeout(async () => {
+        const { queryValue, ...otherFilters } = filterValues;
+
+        const filters: string[] = [];
+
+        if (queryValue) {
+          filters.push(`${queryKey}|${queryValue.trim()}`);
+        }
+
+        Object.entries(otherFilters).forEach(([filterKey, filterValue]) => {
+          if (Array.isArray(filterValue) && filterValue.length) {
+            filters.push(`${filterKey}|array|any|${filterValue.join(',')}`);
+          } else if (typeof filterValue === 'string' && filterValue) {
+            filters.push(`${filterKey}|${filterValue}`);
+          }
+        });
+
+        let sortString: string | undefined;
+        if (sort?.length) {
+          const [field, direction] = sort[0].split(' ');
+          sortString = `${field}|${direction || 'asc'}`;
+        }
+
+        let url = buildQueryUrl(endpoint, {
+          page: page > 1 ? page : undefined,
+          limit,
+          sort: sortString,
+          filters: filters.length > 0 ? filters : undefined,
+        });
+
+        if (abbreviated) {
+          const separator = url.includes('?') ? '&' : '?';
+          url = `${url}${separator}abbreviated=${encodeURIComponent(abbreviated)}`;
+        }
+
+        aborters[endpoint] = new AbortController();
+
+        try {
+          const response = await fetchFn(url, {
+            signal: aborters[endpoint].signal,
+          } as RequestInit);
+
+          if (aborters[endpoint].signal.aborted) {
+            resolve(null);
+            return;
+          }
+
+          let res: any;
+          if (response instanceof Response) {
+            res = await response.json();
+          } else {
+            res = response;
+          }
+
+          if (transformResponse) {
+            res = transformResponse(res);
+          }
+
+          if (res?.message !== 'aborted') {
+            resolve({
+              items: res.items || [],
+              total: res.total || 0,
+            });
+          } else {
+            resolve(null);
+          }
+        } catch (error: any) {
+          if (error?.name === 'AbortError' || error?.message === 'aborted') {
+            resolve(null);
+          } else {
+            console.error('Error fetching data:', error);
+            setError(error instanceof Error ? error : new Error(String(error)));
+            resolve({ items: [], total: 0 });
+          }
+        }
+      }, debounceMs);
+    });
   }, [
     endpoint,
-    state.page,
-    state.limit,
-    state.sort,
-    state.filters,
-    state.queryValue,
+    filterValues,
+    limit,
+    page,
     queryKey,
+    sort,
     abbreviated,
+    abortRequest,
     fetchFn,
     transformResponse,
-    abortRequest,
+    debounceMs,
   ]);
 
-  // Fetch local data
-  const fetchLocalData = useCallback((): QueryResult<T> => {
-    if (!localData) {
-      return { items: [], total: 0, page: 1 };
-    }
-
-    return filterItemsLocally(localData as Record<string, unknown>[], {
-      queryKey,
-      queryValue: state.queryValue,
-      filters: state.filters,
-      sort: state.sort,
-      page: state.page,
-      limit: state.limit,
-    }) as unknown as QueryResult<T>;
-  }, [localData, queryKey, state]);
-
-  // Main fetch function
+  // Main data fetching function
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      let result: QueryResult<T> | null;
+      let result;
 
       if (localData) {
-        result = fetchLocalData();
+        result = handleLocalData();
       } else {
-        result = await fetchRemoteData();
+        result = await handleRemoteData();
       }
 
       if (result !== null) {
@@ -246,109 +463,120 @@ export function useDataSource<T = unknown>(
         setLoading(false);
         setFirstLoad(false);
       }
-    } catch (err) {
-      console.error('===> Error fetching data:', err);
-      setError(err as Error);
+    } catch (error) {
+      console.error('Error in fetchData:', error);
+      setError(error instanceof Error ? error : new Error(String(error)));
       setLoading(false);
       setFirstLoad(false);
     }
-  }, [localData, fetchLocalData, fetchRemoteData]);
+  }, [localData, handleLocalData, handleRemoteData]);
 
-  // Debounced fetch
-  const debouncedFetch = useMemo(() => debounce(fetchData, debounceMs), [fetchData, debounceMs]);
-
-  // Fetch on state change
+  // Fetch data when dependencies change
   useEffect(() => {
-    debouncedFetch();
-    return () => {
-      debouncedFetch.cancel();
-      abortRequest();
-    };
-  }, [
-    debouncedFetch,
-    abortRequest,
-    refreshCounter.current, // eslint-disable-line react-hooks/exhaustive-deps
-  ]);
+    fetchData();
+    return () => abortRequest(endpoint);
+  }, [refreshTrigger, endpoint, fetchData, abortRequest]);
 
-  // Action handlers
-  const setPage = useCallback((page: number) => {
-    setState((prev) => ({ ...prev, page }));
+  // UI state handlers
+  const filters = useSetIndexFiltersMode();
+
+  // Handler functions
+  const handleSetSort = useCallback((newSort: string[]) => {
+    setSortState(newSort);
   }, []);
 
-  const setQueryValue = useCallback((queryValue: string) => {
-    setState((prev) => ({ ...prev, queryValue, page: 1 }));
+  const handleSetFilterValues = useCallback((newFilters: Record<string, any>) => {
+    setFilterValuesState(newFilters);
+    setPageState(1);
   }, []);
 
-  const setFilter = useCallback((key: string, value: FilterValue) => {
-    setState((prev) => ({
-      ...prev,
-      filters: { ...prev.filters, [key]: value },
-      page: 1,
-    }));
+  const handleSetPage = useCallback((newPage: number) => {
+    setPageState(newPage);
   }, []);
 
-  const setFilters = useCallback((filters: Record<string, FilterValue>) => {
-    setState((prev) => ({
-      ...prev,
-      filters,
-      page: 1,
-    }));
-  }, []);
+  const setQueryValue = useCallback(
+    (value: string) => {
+      handleSetFilterValues({ ...filterValues, queryValue: value });
+    },
+    [filterValues, handleSetFilterValues]
+  );
+
+  const setFilter = useCallback(
+    (key: string, value: any) => {
+      handleSetFilterValues({ ...filterValues, [key]: value });
+    },
+    [filterValues, handleSetFilterValues]
+  );
+
+  const setFilters = useCallback(
+    (filters: Record<string, any>) => {
+      handleSetFilterValues({ ...filterValues, ...filters });
+    },
+    [filterValues, handleSetFilterValues]
+  );
 
   const clearFilters = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      filters: {},
-      queryValue: '',
-      page: 1,
-    }));
-  }, []);
+    handleSetFilterValues({ queryValue: '' });
+  }, [handleSetFilterValues]);
 
-  const setSort = useCallback((sort: SortDefinition | null) => {
-    setState((prev) => ({ ...prev, sort }));
-  }, []);
+  const setSort = useCallback(
+    (sortDef: SortDefinition | null) => {
+      if (sortDef) {
+        handleSetSort([`${sortDef.field} ${sortDef.direction}`]);
+      } else {
+        handleSetSort([]);
+      }
+    },
+    [handleSetSort]
+  );
 
   const setSelectedView = useCallback(
     (index: number) => {
-      const view = views[index];
+      const view = defaultViews[index];
       if (view) {
-        setState((prev) => ({
-          ...prev,
-          selectedView: index,
-          filters: view.filters || {},
-          page: 1,
-        }));
+        setViewSelectedState(view.name);
+        handleSetFilterValues(view.filters);
       }
     },
-    [views]
+    [defaultViews, handleSetFilterValues]
   );
 
   const refresh = useCallback(() => {
-    refreshCounter.current += 1;
-    setState((prev) => ({ ...prev }));
+    setRefreshTrigger((prev) => prev + 1);
   }, []);
 
-  // Polaris helpers
-  const tabs = useMemo(
-    () =>
-      views.map((view) => ({
-        id: view.id || view.name,
-        content: view.name,
-        panelID: `${view.id || view.name}-panel`,
-        badge: areFiltersEmpty(view.filters) ? undefined : 'Filtered',
-      })),
-    [views]
-  );
+  // Generate tabs from defaultViews
+  const tabs = defaultViews.map((view, index) => ({
+    content: view.name,
+    index,
+    id: (view?._id || view?.name) ?? '',
+    onAction: () => setSelectedView(index),
+  }));
 
-  const sortSelected = useMemo(() => sortToPolaris(state.sort), [state.sort]);
-
+  // Convert sort to Polaris format
+  const sortSelected = sort || [];
   const onSort = useCallback(
     (selected: string[]) => {
-      const newSort = polarisToSort(selected);
-      setSort(newSort);
+      handleSetSort(selected);
     },
-    [setSort]
+    [handleSetSort]
   );
+
+  // Use pagination hook
+  const pagination = usePagination({
+    page,
+    limit,
+    total,
+    onPageChange: handleSetPage,
+  });
+
+  const state: QueryState = {
+    page,
+    limit,
+    sort,
+    filterValues,
+    viewSelected,
+  };
 
   return {
     state,
@@ -357,9 +585,7 @@ export function useDataSource<T = unknown>(
     loading,
     firstLoad,
     error,
-
-    // Actions
-    setPage,
+    setPage: handleSetPage,
     setQueryValue,
     setFilter,
     setFilters,
@@ -367,11 +593,10 @@ export function useDataSource<T = unknown>(
     setSort,
     setSelectedView,
     refresh,
-
-    // Polaris helpers
     tabs,
     sortOptions: [],
     sortSelected,
     onSort,
+    pagination,
   };
 }

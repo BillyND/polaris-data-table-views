@@ -1,27 +1,11 @@
-import React from "react";
-import { BlockStack, Divider, IndexTable, SkeletonBodyText, Box } from "@shopify/polaris";
-import type { ListTableChildProps } from "./types";
+import React from 'react';
+import { BlockStack, Divider, IndexTable } from '@shopify/polaris';
+import type { ListTableProps } from '../types';
+import { TABLE_ITEM_LIST_LIMITATION } from '../constants';
+import { usePagination } from '../hooks/usePagination';
 
-const DEFAULT_LIMIT = 50;
-
-/**
- * Default loading skeleton
- */
-function DefaultLoadingSkeleton() {
-  return (
-    <Box padding="400">
-      <BlockStack gap="400">
-        <SkeletonBodyText lines={3} />
-        <SkeletonBodyText lines={3} />
-        <SkeletonBodyText lines={3} />
-      </BlockStack>
-    </Box>
-  );
-}
-
-export function ListTableContent<T>(props: ListTableChildProps<T>) {
+export function ListTableContent(props: ListTableProps) {
   const {
-    t,
     page,
     items,
     total,
@@ -29,44 +13,38 @@ export function ListTableContent<T>(props: ListTableChildProps<T>) {
     headings,
     condensed,
     firstLoad,
-    selectable = true,
+    selectable,
     bulkActions,
     resourceName,
     renderRowMarkup,
     promotedBulkActions,
     showPagination = true,
-    limit = DEFAULT_LIMIT,
-    selectedResources,
-    allResourcesSelected,
-    handleSelectionChange,
-    clearSelection,
+    limit = TABLE_ITEM_LIST_LIMITATION,
+    useSetIndexFiltersMode: { selectedResources, allResourcesSelected, handleSelectionChange },
     loading,
-    loadingComponent,
   } = props;
 
-  // Helper functions for row rendering context
-  const getSelectedResources = () => selectedResources;
-  const clearAllSelection = () => clearSelection();
+  // Use pagination hook
+  const pagination = usePagination({
+    page,
+    limit,
+    total,
+    onPageChange: setPage || (() => {}),
+  });
 
-  // Generate pagination config
-  const paginationConfig = React.useMemo(() => {
-    if (!showPagination || firstLoad) return undefined;
+  // Helper functions for row rendering
+  const getSelectedResources = () => {
+    return selectedResources;
+  };
 
-    const totalPages = Math.ceil(total / limit) || 1;
-    const hasNext = page < totalPages;
-    const hasPrevious = page > 1;
+  const clearAllSelection = () => {
+    handleSelectionChange('page', false);
+  };
 
-    return {
-      hasNext,
-      hasPrevious,
-      onNext: () => setPage(page + 1),
-      onPrevious: () => setPage(page - 1),
-      label: total > 0 ? t("page-totalpage", { page, totalPage: totalPages }) : "",
-    };
-  }, [showPagination, firstLoad, total, limit, page, setPage, t]);
-
-  // Empty/loading state
-  const emptyState = firstLoad ? (loadingComponent || <DefaultLoadingSkeleton />) : undefined;
+  // Generate empty state - simple loading indicator
+  const emptyState = firstLoad ? (
+    <div style={{ paddingTop: '90px', textAlign: 'center' }}>Loading...</div>
+  ) : undefined;
 
   return (
     <BlockStack>
@@ -76,31 +54,35 @@ export function ListTableContent<T>(props: ListTableChildProps<T>) {
         condensed={condensed}
         emptyState={emptyState}
         selectable={selectable}
-        itemCount={items?.length || 0}
+        itemCount={items?.length}
         bulkActions={bulkActions}
         resourceName={resourceName}
         onSelectionChange={handleSelectionChange}
         promotedBulkActions={promotedBulkActions}
-        selectedItemsCount={allResourcesSelected ? "All" : selectedResources?.length || 0}
-        pagination={paginationConfig}
+        selectedItemsCount={allResourcesSelected ? 'All' : selectedResources?.length}
+        pagination={
+          showPagination && !firstLoad
+            ? {
+                hasNext: pagination.hasNext,
+                hasPrevious: pagination.hasPrevious,
+                onNext: pagination.onNext,
+                onPrevious: pagination.onPrevious,
+                label: pagination.label,
+              }
+            : {}
+        }
       >
-        {(items || []).map((item: T, index: number) => {
-          const itemWithId = item as T & { uuid?: string; _id?: string; id?: string };
-          const key = itemWithId.uuid || itemWithId._id || itemWithId.id || index;
-
-          return (
-            <React.Fragment key={key}>
-              {renderRowMarkup(item, index, selectedResources, {
-                getSelectedResources,
-                clearAllSelection,
-              })}
-            </React.Fragment>
-          );
-        })}
+        {items.map((item: any, index: number) => (
+          <React.Fragment key={item.uuid || item._id || item.id || index}>
+            {renderRowMarkup(item, index, selectedResources, {
+              getSelectedResources,
+              clearAllSelection,
+            })}
+          </React.Fragment>
+        ))}
       </IndexTable>
 
       <Divider />
     </BlockStack>
   );
 }
-

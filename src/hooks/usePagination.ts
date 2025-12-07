@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from 'react';
 
 export interface UsePaginationOptions {
   page: number;
@@ -8,55 +8,29 @@ export interface UsePaginationOptions {
 }
 
 export interface UsePaginationReturn {
-  /** Current page (1-indexed) */
   page: number;
-  /** Total number of pages */
   totalPages: number;
-  /** Whether there's a previous page */
   hasPrevious: boolean;
-  /** Whether there's a next page */
   hasNext: boolean;
-  /** Go to previous page */
   onPrevious: () => void;
-  /** Go to next page */
   onNext: () => void;
-  /** Go to specific page */
   goToPage: (page: number) => void;
-  /** Pagination label (e.g., "1-20 of 100") */
   label: string;
 }
 
 /**
- * Hook for managing pagination state
- *
- * @example
- * ```tsx
- * const { hasPrevious, hasNext, onPrevious, onNext, label } = usePagination({
- *   page: state.page,
- *   limit: 20,
- *   total: 100,
- *   onPageChange: setPage,
- * });
- *
- * <Pagination
- *   hasPrevious={hasPrevious}
- *   hasNext={hasNext}
- *   onPrevious={onPrevious}
- *   onNext={onNext}
- *   label={label}
- * />
- * ```
+ * Hook for managing pagination state and actions
  */
-export function usePagination(options: UsePaginationOptions): UsePaginationReturn {
-  const { page, limit, total, onPageChange } = options;
+export function usePagination({
+  page,
+  limit,
+  total,
+  onPageChange,
+}: UsePaginationOptions): UsePaginationReturn {
+  const totalPages = useMemo(() => Math.ceil(total / limit), [total, limit]);
 
-  const totalPages = useMemo(
-    () => Math.ceil(total / limit) || 1,
-    [total, limit]
-  );
-
-  const hasPrevious = page > 1;
-  const hasNext = page < totalPages;
+  const hasPrevious = useMemo(() => page > 1, [page]);
+  const hasNext = useMemo(() => page < totalPages, [page, totalPages]);
 
   const onPrevious = useCallback(() => {
     if (hasPrevious) {
@@ -72,18 +46,17 @@ export function usePagination(options: UsePaginationOptions): UsePaginationRetur
 
   const goToPage = useCallback(
     (newPage: number) => {
-      const clampedPage = Math.max(1, Math.min(newPage, totalPages));
-      onPageChange(clampedPage);
+      if (newPage >= 1 && newPage <= totalPages) {
+        onPageChange(newPage);
+      }
     },
     [totalPages, onPageChange]
   );
 
   const label = useMemo(() => {
-    if (total === 0) return "0 results";
-
+    if (total === 0) return '';
     const start = (page - 1) * limit + 1;
     const end = Math.min(page * limit, total);
-
     return `${start}-${end} of ${total}`;
   }, [page, limit, total]);
 

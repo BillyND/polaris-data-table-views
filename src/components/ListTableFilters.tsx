@@ -1,21 +1,19 @@
-import React, { useCallback, useMemo } from 'react';
+import React from 'react';
 import { IndexFilters } from '@shopify/polaris';
 import type { IndexFiltersProps, TabProps } from '@shopify/polaris';
-import type { ListTableChildProps, ListTableFilter, FilterComponentConfig } from './types';
-import type { FilterValue } from '../types';
-import { isEqual } from '../utils/helpers';
+import type { ListTableFilter, ListTableProps, ListTableState, ListTableView } from '../types';
+import { VIEW_ACTIONS } from '../types';
+import { defaultFetch } from '../utils/defaultFetch';
+import { defaultT } from '../utils/helpers';
+import lodash from 'lodash';
 
-interface ListTableFiltersProps<T> extends ListTableChildProps<T> {
-  onCreateView?: (name: string) => Promise<boolean>;
-  onRenameView?: (name: string, index: number) => void;
-  onDuplicateView?: (name: string, index: number) => void;
-  onDeleteView?: (index: number) => void;
-  onUpdateView?: () => Promise<boolean>;
-}
-
-export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
+export function ListTableFilters(
+  props: ListTableProps,
+  state: ListTableState,
+  setState: React.Dispatch<React.SetStateAction<ListTableState>>
+) {
   const {
-    t,
+    t = defaultT,
     sort,
     loading,
     setSort,
@@ -23,206 +21,330 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
     sortOptions,
     showFilter = true,
     queryPlaceholder,
-    queryValue,
-    filterValues,
-    setFilterValues,
-    setQueryValue,
-    mode,
-    setMode,
-    views,
-    selectedView,
-    setSelectedView,
-    filters: filterDefs,
-    renderFilterLabel,
-    onCreateView,
-    onRenameView,
-    onDuplicateView,
-    onDeleteView,
-    onUpdateView,
+    filterValues: { queryValue },
+    useIndexResourceState: { mode, setMode },
+    setViewSelected,
+    viewsEndpoint,
+    fetchFunction = defaultFetch,
+    fetchFn,
+    onlyLocalData = false,
   } = props;
 
-  // Query handlers
-  const onQueryChange = useCallback(
-    (value: string) => {
-      setQueryValue(value);
-    },
-    [setQueryValue]
-  );
+  // Support both fetchFn and fetchFunction (fetchFn takes precedence)
+  const effectiveFetchFunction = fetchFn || fetchFunction || defaultFetch;
 
-  const onQueryClear = useCallback(() => {
-    onQueryChange('');
-  }, [onQueryChange]);
+  const { selected } = state;
 
-  // Filter handlers
-  const removeAppliedFilter = useCallback(
-    (key: string) => {
-      const newFilters = { ...filterValues };
-      delete newFilters[key];
-      setFilterValues(newFilters);
-    },
-    [filterValues, setFilterValues]
-  );
-
-  const clearAllAppliedFilters = useCallback(() => {
-    setFilterValues({});
-    setQueryValue('');
-  }, [setFilterValues, setQueryValue]);
-
-  const cancelFilters = useCallback(() => {
-    const viewFilters = views[selectedView]?.filters || {};
-    setFilterValues(viewFilters);
-    setQueryValue((viewFilters.queryValue as string) || '');
-  }, [views, selectedView, setFilterValues, setQueryValue]);
-
-  // Check if filter is a component config
-  const isComponentConfig = (filter: unknown): filter is FilterComponentConfig => {
-    return (
-      typeof filter === 'object' && filter !== null && 'Component' in filter && 'props' in filter
-    );
+  // Declare all the function handlers first
+  const onQueryChange = (queryValue: string) => {
+    const { filterValues, setFilterValues } = props;
+    setFilterValues({ ...filterValues, queryValue });
   };
 
-  // Generate filters with components for IndexFilters
-  const filters = useMemo(() => {
-    if (!filterDefs) return [];
+  const onQueryClear = () => onQueryChange('');
 
-    return filterDefs.map((def) => {
-      const filterConfig = def.filter;
+  const removeAppliedFilter = (key: string): void => {
+    const { filterValues, setFilterValues } = props;
+    setFilterValues({
+      ...filterValues,
+      [key]: undefined,
+      queryValue: filterValues.queryValue || '',
+    });
+  };
 
-      // If it's a component config, render the component
-      if (isComponentConfig(filterConfig)) {
-        const { Component, props: compProps } = filterConfig;
+  const clearAllAppliedFilters = () => {
+    const { setFilterValues } = props;
+    setFilterValues({ queryValue: '' });
+  };
 
-        return {
-          key: def.key,
-          label: def.label,
-          shortcut: def.shortcut,
-          filter: (
+  const cancelFilters = () => {
+    const { setFilterValues } = props;
+    const { views, selected } = state;
+    const viewFilters = views[selected]?.filters || {};
+    setFilterValues({
+      queryValue: viewFilters.queryValue || '',
+      ...viewFilters,
+    });
+  };
+
+  const setSelectedView = (selected: number) => {
+    // Get viewNameOrId from views before state update (setState is async)
+    const viewNameOrId = state.views[selected]?._id || state.views[selected]?.name;
+    setState({ ...state, selected });
+
+    if (setViewSelected) {
+      setViewSelected(viewNameOrId || null);
+    } else {
+      console.error('===> setViewSelected is not available in props');
+    }
+  };
+
+  const createView = async (value: string): Promise<boolean> => {
+    const { filterValues } = props;
+    const { views } = state;
+
+    if (!onlyLocalData && viewsEndpoint) {
+      try {
+        await effectiveFetchFunction(
+          `${viewsEndpoint}?path=${
+            typeof window !== 'undefined' ? window.location.pathname : ''
+          }&action=${VIEW_ACTIONS.CREATE}&name=${encodeURIComponent(value)}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(filterValues),
+          }
+        );
+      } catch (error) {
+        console.error('Error creating view:', error);
+      }
+    }
+
+    setState({
+      ...state,
+      selected: views?.length,
+      views: [...views, { name: value, filters: filterValues }],
+    });
+
+    return true;
+  };
+
+  const renameView = (value: string, index: number) => {
+    const { views } = state;
+    const newViews = views.map((item: any, idx: number) => {
+      if (idx === index) {
+        if (!onlyLocalData && viewsEndpoint) {
+          effectiveFetchFunction(
+            `${viewsEndpoint}?path=${
+              typeof window !== 'undefined' ? window.location.pathname : ''
+            }&action=${VIEW_ACTIONS.RENAME}&oldName=${encodeURIComponent(
+              item.name
+            )}&newName=${encodeURIComponent(value)}`,
+            {
+              method: 'GET',
+            }
+          ).catch((error) => console.error('Error renaming view:', error));
+        }
+
+        item.name = value;
+      }
+
+      return item;
+    });
+
+    setState({ ...state, views: newViews });
+  };
+
+  const updateView = async (): Promise<boolean> => {
+    const { filterValues } = props;
+    const { views, selected } = state;
+    const newViews = [...views].map((view, index) =>
+      index === selected ? { ...view, filters: filterValues } : view
+    );
+
+    if (!onlyLocalData && viewsEndpoint) {
+      try {
+        await effectiveFetchFunction(
+          `${viewsEndpoint}?path=${
+            typeof window !== 'undefined' ? window.location.pathname : ''
+          }&action=${VIEW_ACTIONS.UPDATE}&name=${encodeURIComponent(views[selected].name)}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify(filterValues),
+          }
+        );
+      } catch (error) {
+        console.error('Error updating view:', error);
+      }
+    }
+
+    setState({ ...state, views: newViews });
+
+    return true;
+  };
+
+  const duplicateView = (name: string, index: number) => {
+    const { views } = state;
+    const newFilters = views[index]?.filters;
+
+    if (!onlyLocalData && viewsEndpoint) {
+      fetchFunction(
+        `${viewsEndpoint}?path=${
+          typeof window !== 'undefined' ? window.location.pathname : ''
+        }&action=${VIEW_ACTIONS.CREATE}&name=${encodeURIComponent(name)}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(newFilters),
+        }
+      ).catch((error) => console.error('Error duplicating view:', error));
+    }
+
+    setState({
+      ...state,
+      selected: views?.length,
+      views: [...views, { name, filters: newFilters }],
+    });
+  };
+
+  const deleteView = (index: number) => {
+    const { views } = state;
+    const newViews = [...views];
+    const name = newViews.splice(index, 1)[0]?.name;
+
+    if (!onlyLocalData && viewsEndpoint) {
+      fetchFunction(
+        `${viewsEndpoint}?path=${
+          typeof window !== 'undefined' ? window.location.pathname : ''
+        }&action=${VIEW_ACTIONS.DELETE}&name=${encodeURIComponent(name)}`,
+        {
+          method: 'GET',
+        }
+      ).catch((error) => console.error('Error deleting view:', error));
+    }
+
+    setState({
+      ...state,
+      selected: 0,
+      views: newViews,
+    });
+
+    // Clear all filter after select tab 0 (All)
+    clearAllAppliedFilters();
+  };
+
+  // Filter generation functions
+  function generateFilters(): ListTableFilter[] {
+    const { filters, filterValues, setFilterValues } = props;
+
+    return (
+      filters?.map((def: ListTableFilter) => {
+        const _def = { ...def };
+        const { Component, props: compProps } = def.filter;
+
+        if (Component && compProps) {
+          _def.filter = (
             <Component
               {...compProps}
-              {...(compProps.value !== undefined ? { value: filterValues[def.key] } : {})}
+              {...(compProps.value ? { value: filterValues[def.key] } : {})}
               {...(compProps.choices ? { selected: filterValues[def.key] || [] } : {})}
-              onChange={(value: FilterValue) =>
+              onChange={(value: any) =>
                 setFilterValues({
                   ...filterValues,
+                  queryValue: filterValues.queryValue || '',
                   [def.key]: value,
                 })
               }
             />
-          ),
-        };
+          );
+
+          return _def;
+        }
+
+        return def;
+      }) || []
+    );
+  }
+
+  function generateAppliedFilters(): IndexFiltersProps['appliedFilters'] {
+    const filters = generateFilters();
+    const { queryKey, filterValues, renderFilterLabel } = props;
+
+    // Generate applied filters from current filter values
+    const appliedFilters: IndexFiltersProps['appliedFilters'] = [];
+
+    for (const key in filterValues) {
+      if (key !== queryKey && filterValues[key]?.length) {
+        const filter = filters?.find((filter: ListTableFilter) => filter.key === key);
+
+        if (filter) {
+          appliedFilters.push({
+            key,
+            label: renderFilterLabel ? renderFilterLabel(key, filterValues[key]) : filter.label,
+            onRemove: () => removeAppliedFilter(key),
+          });
+        }
       }
-
-      // Otherwise return as-is (ReactNode)
-      return {
-        key: def.key,
-        label: def.label,
-        shortcut: def.shortcut,
-        filter: filterConfig,
-      };
-    });
-  }, [filterDefs, filterValues, setFilterValues]);
-
-  // Generate applied filters
-  const appliedFilters = useMemo((): IndexFiltersProps['appliedFilters'] => {
-    const applied: IndexFiltersProps['appliedFilters'] = [];
-
-    for (const [key, value] of Object.entries(filterValues)) {
-      if (key === 'queryValue') continue;
-
-      const hasValue = Array.isArray(value)
-        ? value.length > 0
-        : value !== undefined && value !== '';
-      if (!hasValue) continue;
-
-      const filterDef = filters.find((f) => f.key === key);
-      if (!filterDef) continue;
-
-      applied.push({
-        key,
-        label: renderFilterLabel ? renderFilterLabel(key, value) : filterDef.label,
-        onRemove: () => removeAppliedFilter(key),
-      });
     }
 
-    return applied;
-  }, [filterValues, filters, renderFilterLabel, removeAppliedFilter]);
+    return appliedFilters;
+  }
 
-  // Generate primary action
-  const primaryAction = useMemo(() => {
-    const currentFilters = views[selectedView]?.filters || {};
-    const combinedNew = { ...filterValues, queryValue };
-    const combinedCurrent = { ...currentFilters, queryValue: currentFilters.queryValue || '' };
-    const disabled = isEqual(combinedCurrent, combinedNew);
+  function generatePrimaryActionForFilters(): any {
+    const { views, selected } = state;
+    const { filterValues: newFilters } = props;
+    const currentFilters = [...views][selected]?.filters || {};
+    const disabled = lodash.isEqual(currentFilters, newFilters);
 
-    if (selectedView === 0) {
-      return {
-        type: 'save-as' as const,
-        onAction: onCreateView || (async () => true),
-        disabled,
-        loading: false,
-      };
+    return selected === 0
+      ? {
+          type: 'save-as',
+          onAction: createView,
+          disabled,
+          loading: false,
+        }
+      : {
+          type: 'save',
+          onAction: updateView,
+          disabled,
+          loading: false,
+        };
+  }
+
+  function generateTabsForViews(): TabProps[] {
+    const { setFilterValues } = props;
+    const { views } = state;
+
+    if (!views || views.length === 0) {
+      return [];
     }
 
-    return {
-      type: 'save' as const,
-      onAction: onUpdateView || (async () => true),
-      disabled,
-      loading: false,
-    };
-  }, [views, selectedView, filterValues, queryValue, onCreateView, onUpdateView]);
-
-  // Generate tabs for views
-  const tabs = useMemo((): TabProps[] => {
-    if (!views || views.length === 0) return [];
-
-    return views.map((view, index) => ({
+    return views.map((item: ListTableView, index: number) => ({
       index,
-      content: view.name,
+      content: item.name,
       isLocked: index === 0,
-      id: `${index}-${view.name}`,
-      key: `${index}-${view.name}`,
+      id: `${index}-${item.name}`,
+      key: `${index}-${item.name}`,
       onAction: () => {
-        const filters = view.filters || {};
+        // Add queryValue with default empty string to avoid type errors
+        const filters = {
+          ...views[index].filters,
+          queryValue: views[index].filters.queryValue || '',
+        };
         setFilterValues(filters);
-        setQueryValue((filters.queryValue as string) || '');
       },
       actions:
         index === 0
           ? []
           : [
-              // Rename action
-              ...(!view.allowActions || view.allowActions.includes('rename')
+              ...(!item.allowActions || item.allowActions?.includes(VIEW_ACTIONS.RENAME)
                 ? [
                     {
                       type: 'rename' as const,
                       onPrimaryAction: async (value: string): Promise<boolean> => {
-                        onRenameView?.(value, index);
+                        renameView(value, index);
                         return true;
                       },
                     },
                   ]
                 : []),
 
-              // Duplicate action
-              ...(!view.allowActions || view.allowActions.includes('duplicate')
+              ...(!item.allowActions || item.allowActions?.includes(VIEW_ACTIONS.DUPLICATE)
                 ? [
                     {
                       type: 'duplicate' as const,
                       onPrimaryAction: async (value: string): Promise<boolean> => {
-                        onDuplicateView?.(value, index);
+                        duplicateView(value, index);
                         return true;
                       },
                     },
                   ]
                 : []),
 
-              // Delete action
-              ...(!view.allowActions || view.allowActions.includes('delete')
+              ...(!item.allowActions || item.allowActions?.includes(VIEW_ACTIONS.DELETE)
                 ? [
                     {
                       type: 'delete' as const,
                       onPrimaryAction: async (): Promise<boolean> => {
-                        onDeleteView?.(index);
+                        deleteView(index);
                         return true;
                       },
                     },
@@ -230,45 +352,45 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
                 : []),
             ],
     }));
-  }, [views, setFilterValues, setQueryValue, onRenameView, onDuplicateView, onDeleteView]);
-
-  // Ensure sort is always a valid array of strings
-  const validSort = useMemo(() => {
-    if (!Array.isArray(sort)) return [];
-    return sort.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-  }, [sort]);
-
-  if (!showFilter || firstLoad) {
-    return null;
   }
 
+  // Generate all components
+  const filters = generateFilters();
+  const tabs = generateTabsForViews();
+  const appliedFilters = generateAppliedFilters();
+  const primaryAction = generatePrimaryActionForFilters();
+
   return (
-    <IndexFilters
-      canCreateNewView
-      mode={mode}
-      tabs={tabs}
-      onSort={setSort}
-      filters={filters}
-      loading={loading}
-      setMode={setMode}
-      selected={selectedView}
-      sortSelected={validSort}
-      queryValue={queryValue}
-      sortOptions={sortOptions}
-      primaryAction={primaryAction}
-      appliedFilters={appliedFilters}
-      onSelect={setSelectedView}
-      onQueryClear={onQueryClear}
-      onCreateNewView={onCreateView}
-      onQueryChange={onQueryChange}
-      onClearAll={clearAllAppliedFilters}
-      queryPlaceholder={queryPlaceholder || t('filter-items')}
-      isFlushWhenSticky
-      cancelAction={{
-        onAction: cancelFilters,
-        disabled: false,
-        loading: false,
-      }}
-    />
+    <>
+      {showFilter && !firstLoad && (
+        <IndexFilters
+          canCreateNewView
+          mode={mode}
+          tabs={tabs}
+          onSort={setSort}
+          filters={filters}
+          loading={loading}
+          setMode={setMode}
+          selected={selected}
+          sortSelected={sort}
+          queryValue={queryValue}
+          sortOptions={sortOptions}
+          primaryAction={primaryAction}
+          appliedFilters={appliedFilters}
+          onSelect={setSelectedView}
+          onQueryClear={onQueryClear}
+          onCreateNewView={createView}
+          onQueryChange={onQueryChange}
+          onClearAll={clearAllAppliedFilters}
+          queryPlaceholder={queryPlaceholder || t('filter-items')}
+          isFlushWhenSticky
+          cancelAction={{
+            onAction: cancelFilters,
+            disabled: false,
+            loading: false,
+          }}
+        />
+      )}
+    </>
   );
 }
