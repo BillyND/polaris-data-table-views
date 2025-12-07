@@ -94,6 +94,7 @@ export { ListTable, ListTableFilters, ListTableContent } from "./components";
 export { useDataSource } from "./hooks/useDataSource";
 export { useSelection } from "./hooks/useSelection";
 export { usePagination } from "./hooks/usePagination";
+export { useUrlParams } from "./hooks/useUrlParams";
 
 // Utils
 export {

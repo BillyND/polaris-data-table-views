@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useSearchParams } from "react-router";
-import debounce from "lodash/debounce";
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import debounce from 'lodash/debounce';
+import { useUrlParams } from './useUrlParams';
 import type {
   UseDataSourceOptions,
   UseDataSourceReturn,
@@ -9,19 +9,14 @@ import type {
   FilterValue,
   SortDefinition,
   ViewDefinition,
-} from "../types";
-import {
-  buildUrl,
-  objectToFilters,
-  parseUrlParams,
-  serializeToUrlParams,
-} from "../utils/buildUrl";
+} from '../types';
+import { buildUrl, objectToFilters, parseUrlParams, serializeToUrlParams } from '../utils/buildUrl';
 import {
   sortToPolaris,
   polarisToSort,
   filterItemsLocally,
   areFiltersEmpty,
-} from "../utils/filters";
+} from '../utils/filters';
 
 // Cache for abort controllers
 const abortControllers: Record<string, AbortController> = {};
@@ -29,10 +24,7 @@ const abortControllers: Record<string, AbortController> = {};
 /**
  * Default fetch function
  */
-async function defaultFetch(
-  url: string,
-  options?: RequestInit
-): Promise<unknown> {
+async function defaultFetch(url: string, options?: RequestInit): Promise<unknown> {
   const response = await fetch(url, options);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -95,7 +87,7 @@ export function useDataSource<T = unknown>(
     debounceMs = 300,
   } = options;
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useUrlParams();
   const isInitialMount = useRef(true);
   const refreshCounter = useRef(0);
 
@@ -105,8 +97,7 @@ export function useDataSource<T = unknown>(
       const parsed = parseUrlParams(searchParams);
       const viewIndex = parsed.viewSelected
         ? defaultViews.findIndex(
-            (v) =>
-              v.name === parsed.viewSelected || v.id === parsed.viewSelected
+            (v) => v.name === parsed.viewSelected || v.id === parsed.viewSelected
           )
         : 0;
 
@@ -123,7 +114,7 @@ export function useDataSource<T = unknown>(
     return {
       page: 1,
       limit: defaultLimit,
-      queryValue: "",
+      queryValue: '',
       filters: {},
       sort: defaultSort,
       selectedView: 0,
@@ -139,7 +130,7 @@ export function useDataSource<T = unknown>(
 
   // Views/Tabs
   const views = useMemo<ViewDefinition[]>(
-    () => [{ name: "All", filters: {} }, ...defaultViews],
+    () => [{ name: 'All', filters: {} }, ...defaultViews],
     [defaultViews]
   );
 
@@ -180,47 +171,44 @@ export function useDataSource<T = unknown>(
   }, [endpoint]);
 
   // Fetch data from API
-  const fetchRemoteData =
-    useCallback(async (): Promise<QueryResult<T> | null> => {
-      abortRequest();
+  const fetchRemoteData = useCallback(async (): Promise<QueryResult<T> | null> => {
+    abortRequest();
 
-      const controller = new AbortController();
-      abortControllers[endpoint] = controller;
+    const controller = new AbortController();
+    abortControllers[endpoint] = controller;
 
-      try {
-        const url = buildUrl({
-          baseUrl: endpoint,
-          page: state.page,
-          limit: state.limit,
-          sort: state.sort,
-          filters: objectToFilters(state.filters),
-          query: state.queryValue
-            ? { field: queryKey, value: state.queryValue }
-            : undefined,
-          abbreviated,
-        });
+    try {
+      const url = buildUrl({
+        baseUrl: endpoint,
+        page: state.page,
+        limit: state.limit,
+        sort: state.sort,
+        filters: objectToFilters(state.filters),
+        query: state.queryValue ? { field: queryKey, value: state.queryValue } : undefined,
+        abbreviated,
+      });
 
-        const response = await fetchFn(url, { signal: controller.signal });
-        return transformResponse(response) as QueryResult<T>;
-      } catch (err) {
-        if ((err as Error).name === "AbortError") {
-          return null;
-        }
-        throw err;
+      const response = await fetchFn(url, { signal: controller.signal });
+      return transformResponse(response) as QueryResult<T>;
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        return null;
       }
-    }, [
-      endpoint,
-      state.page,
-      state.limit,
-      state.sort,
-      state.filters,
-      state.queryValue,
-      queryKey,
-      abbreviated,
-      fetchFn,
-      transformResponse,
-      abortRequest,
-    ]);
+      throw err;
+    }
+  }, [
+    endpoint,
+    state.page,
+    state.limit,
+    state.sort,
+    state.filters,
+    state.queryValue,
+    queryKey,
+    abbreviated,
+    fetchFn,
+    transformResponse,
+    abortRequest,
+  ]);
 
   // Fetch local data
   const fetchLocalData = useCallback((): QueryResult<T> => {
@@ -259,7 +247,7 @@ export function useDataSource<T = unknown>(
         setFirstLoad(false);
       }
     } catch (err) {
-      console.error("===> Error fetching data:", err);
+      console.error('===> Error fetching data:', err);
       setError(err as Error);
       setLoading(false);
       setFirstLoad(false);
@@ -267,10 +255,7 @@ export function useDataSource<T = unknown>(
   }, [localData, fetchLocalData, fetchRemoteData]);
 
   // Debounced fetch
-  const debouncedFetch = useMemo(
-    () => debounce(fetchData, debounceMs),
-    [fetchData, debounceMs]
-  );
+  const debouncedFetch = useMemo(() => debounce(fetchData, debounceMs), [fetchData, debounceMs]);
 
   // Fetch on state change
   useEffect(() => {
@@ -314,7 +299,7 @@ export function useDataSource<T = unknown>(
     setState((prev) => ({
       ...prev,
       filters: {},
-      queryValue: "",
+      queryValue: '',
       page: 1,
     }));
   }, []);
@@ -350,7 +335,7 @@ export function useDataSource<T = unknown>(
         id: view.id || view.name,
         content: view.name,
         panelID: `${view.id || view.name}-panel`,
-        badge: areFiltersEmpty(view.filters) ? undefined : "Filtered",
+        badge: areFiltersEmpty(view.filters) ? undefined : 'Filtered',
       })),
     [views]
   );

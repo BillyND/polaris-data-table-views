@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BlockStack, Card } from "@shopify/polaris";
-import { useSearchParams } from "react-router";
 import { useSetIndexFiltersMode, useIndexResourceState } from "@shopify/polaris";
 import lodash from "lodash";
+import { useUrlParams } from "../hooks/useUrlParams";
 
 import type {
   ListTableProps,
@@ -100,7 +100,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
     t = defaultT,
   } = props;
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useUrlParams();
   const isInitialMount = useRef(true);
   const refreshCounter = useRef(0);
 
