@@ -52,12 +52,10 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "lodash": "^4.17.21",
     "mongoose-url-query": "^1.6.2"
   },
   "devDependencies": {
     "@shopify/polaris": "13.9.0",
-    "@types/lodash": "4.17.13",
     "@types/react": "18.3.12",
     "react": "18.3.1",
     "tsup": "8.3.5",

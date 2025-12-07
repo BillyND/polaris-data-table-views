@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import lodash from 'lodash';
 import { useUrlParams } from './useUrlParams';
+import { debounce } from '../utils/helpers';
 import type {
   UseDataSourceOptions,
   UseDataSourceReturn,
@@ -156,7 +156,7 @@ export function useDataSource<T = unknown>(
       return;
     }
 
-    const debouncedSync = lodash.debounce(syncToUrl, 100);
+    const debouncedSync = debounce(syncToUrl, 100);
     debouncedSync();
 
     return () => debouncedSync.cancel();
@@ -255,10 +255,7 @@ export function useDataSource<T = unknown>(
   }, [localData, fetchLocalData, fetchRemoteData]);
 
   // Debounced fetch
-  const debouncedFetch = useMemo(
-    () => lodash.debounce(fetchData, debounceMs),
-    [fetchData, debounceMs]
-  );
+  const debouncedFetch = useMemo(() => debounce(fetchData, debounceMs), [fetchData, debounceMs]);
 
   // Fetch on state change
   useEffect(() => {

@@ -1,9 +1,9 @@
-import React, { useCallback, useMemo } from "react";
-import { IndexFilters } from "@shopify/polaris";
-import type { IndexFiltersProps, TabProps } from "@shopify/polaris";
-import type { ListTableChildProps, ListTableFilter, FilterComponentConfig } from "./types";
-import type { FilterValue } from "../types";
-import lodash from "lodash";
+import React, { useCallback, useMemo } from 'react';
+import { IndexFilters } from '@shopify/polaris';
+import type { IndexFiltersProps, TabProps } from '@shopify/polaris';
+import type { ListTableChildProps, ListTableFilter, FilterComponentConfig } from './types';
+import type { FilterValue } from '../types';
+import { isEqual } from '../utils/helpers';
 
 interface ListTableFiltersProps<T> extends ListTableChildProps<T> {
   onCreateView?: (name: string) => Promise<boolean>;
@@ -50,7 +50,7 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
   );
 
   const onQueryClear = useCallback(() => {
-    onQueryChange("");
+    onQueryChange('');
   }, [onQueryChange]);
 
   // Filter handlers
@@ -65,22 +65,19 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
 
   const clearAllAppliedFilters = useCallback(() => {
     setFilterValues({});
-    setQueryValue("");
+    setQueryValue('');
   }, [setFilterValues, setQueryValue]);
 
   const cancelFilters = useCallback(() => {
     const viewFilters = views[selectedView]?.filters || {};
     setFilterValues(viewFilters);
-    setQueryValue(viewFilters.queryValue as string || "");
+    setQueryValue((viewFilters.queryValue as string) || '');
   }, [views, selectedView, setFilterValues, setQueryValue]);
 
   // Check if filter is a component config
   const isComponentConfig = (filter: unknown): filter is FilterComponentConfig => {
     return (
-      typeof filter === "object" &&
-      filter !== null &&
-      "Component" in filter &&
-      "props" in filter
+      typeof filter === 'object' && filter !== null && 'Component' in filter && 'props' in filter
     );
   };
 
@@ -126,13 +123,15 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
   }, [filterDefs, filterValues, setFilterValues]);
 
   // Generate applied filters
-  const appliedFilters = useMemo((): IndexFiltersProps["appliedFilters"] => {
-    const applied: IndexFiltersProps["appliedFilters"] = [];
+  const appliedFilters = useMemo((): IndexFiltersProps['appliedFilters'] => {
+    const applied: IndexFiltersProps['appliedFilters'] = [];
 
     for (const [key, value] of Object.entries(filterValues)) {
-      if (key === "queryValue") continue;
+      if (key === 'queryValue') continue;
 
-      const hasValue = Array.isArray(value) ? value.length > 0 : value !== undefined && value !== "";
+      const hasValue = Array.isArray(value)
+        ? value.length > 0
+        : value !== undefined && value !== '';
       if (!hasValue) continue;
 
       const filterDef = filters.find((f) => f.key === key);
@@ -152,12 +151,12 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
   const primaryAction = useMemo(() => {
     const currentFilters = views[selectedView]?.filters || {};
     const combinedNew = { ...filterValues, queryValue };
-    const combinedCurrent = { ...currentFilters, queryValue: currentFilters.queryValue || "" };
-    const disabled = lodash.isEqual(combinedCurrent, combinedNew);
+    const combinedCurrent = { ...currentFilters, queryValue: currentFilters.queryValue || '' };
+    const disabled = isEqual(combinedCurrent, combinedNew);
 
     if (selectedView === 0) {
       return {
-        type: "save-as" as const,
+        type: 'save-as' as const,
         onAction: onCreateView || (async () => true),
         disabled,
         loading: false,
@@ -165,7 +164,7 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
     }
 
     return {
-      type: "save" as const,
+      type: 'save' as const,
       onAction: onUpdateView || (async () => true),
       disabled,
       loading: false,
@@ -185,17 +184,17 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
       onAction: () => {
         const filters = view.filters || {};
         setFilterValues(filters);
-        setQueryValue((filters.queryValue as string) || "");
+        setQueryValue((filters.queryValue as string) || '');
       },
       actions:
         index === 0
           ? []
           : [
               // Rename action
-              ...(!view.allowActions || view.allowActions.includes("rename")
+              ...(!view.allowActions || view.allowActions.includes('rename')
                 ? [
                     {
-                      type: "rename" as const,
+                      type: 'rename' as const,
                       onPrimaryAction: async (value: string): Promise<boolean> => {
                         onRenameView?.(value, index);
                         return true;
@@ -205,10 +204,10 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
                 : []),
 
               // Duplicate action
-              ...(!view.allowActions || view.allowActions.includes("duplicate")
+              ...(!view.allowActions || view.allowActions.includes('duplicate')
                 ? [
                     {
-                      type: "duplicate" as const,
+                      type: 'duplicate' as const,
                       onPrimaryAction: async (value: string): Promise<boolean> => {
                         onDuplicateView?.(value, index);
                         return true;
@@ -218,10 +217,10 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
                 : []),
 
               // Delete action
-              ...(!view.allowActions || view.allowActions.includes("delete")
+              ...(!view.allowActions || view.allowActions.includes('delete')
                 ? [
                     {
-                      type: "delete" as const,
+                      type: 'delete' as const,
                       onPrimaryAction: async (): Promise<boolean> => {
                         onDeleteView?.(index);
                         return true;
@@ -232,6 +231,12 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
             ],
     }));
   }, [views, setFilterValues, setQueryValue, onRenameView, onDuplicateView, onDeleteView]);
+
+  // Ensure sort is always a valid array of strings
+  const validSort = useMemo(() => {
+    if (!Array.isArray(sort)) return [];
+    return sort.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+  }, [sort]);
 
   if (!showFilter || firstLoad) {
     return null;
@@ -247,7 +252,7 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
       loading={loading}
       setMode={setMode}
       selected={selectedView}
-      sortSelected={sort}
+      sortSelected={validSort}
       queryValue={queryValue}
       sortOptions={sortOptions}
       primaryAction={primaryAction}
@@ -257,7 +262,7 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
       onCreateNewView={onCreateView}
       onQueryChange={onQueryChange}
       onClearAll={clearAllAppliedFilters}
-      queryPlaceholder={queryPlaceholder || t("filter-items")}
+      queryPlaceholder={queryPlaceholder || t('filter-items')}
       isFlushWhenSticky
       cancelAction={{
         onAction: cancelFilters,
@@ -267,4 +272,3 @@ export function ListTableFilters<T>(props: ListTableFiltersProps<T>) {
     />
   );
 }
-

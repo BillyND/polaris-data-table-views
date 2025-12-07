@@ -50,8 +50,11 @@ export function mergeFilters(
  * Returns array like ["field asc"] or ["field desc"]
  */
 export function sortToPolaris(sort: SortDefinition | null): string[] {
-  if (!sort) return [];
-  return [`${sort.field} ${sort.direction}`];
+  if (!sort || !sort.field || !sort.direction) return [];
+  const field = String(sort.field).trim();
+  const direction = String(sort.direction).trim();
+  if (!field || (direction !== "asc" && direction !== "desc")) return [];
+  return [`${field} ${direction}`];
 }
 
 /**
@@ -62,12 +65,14 @@ export function polarisToSort(selected: string[]): SortDefinition | null {
   if (!selected || selected.length === 0) return null;
 
   const [sortString] = selected;
+  if (!sortString || typeof sortString !== "string") return null;
+
   const parts = sortString.split(" ");
 
   if (parts.length !== 2) return null;
 
   const [field, direction] = parts;
-  if (direction !== "asc" && direction !== "desc") return null;
+  if (!field || (direction !== "asc" && direction !== "desc")) return null;
 
   return { field, direction };
 }

@@ -133,10 +133,13 @@ export function parseUrlParams(searchParams: URLSearchParams): {
   // Parse sort
   const sortParam = searchParams.get("sort");
   let sort: SortDefinition | null = null;
-  if (sortParam) {
-    const [field, direction] = sortParam.split("|");
-    if (field && (direction === "asc" || direction === "desc")) {
-      sort = { field, direction };
+  if (sortParam && typeof sortParam === "string") {
+    const parts = sortParam.split("|");
+    if (parts.length === 2) {
+      const [field, direction] = parts;
+      if (field && field.trim() && (direction === "asc" || direction === "desc")) {
+        sort = { field: field.trim(), direction };
+      }
     }
   }
 

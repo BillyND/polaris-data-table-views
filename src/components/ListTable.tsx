@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BlockStack, Card } from "@shopify/polaris";
-import { useSetIndexFiltersMode, useIndexResourceState } from "@shopify/polaris";
-import lodash from "lodash";
-import { useUrlParams } from "../hooks/useUrlParams";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { BlockStack, Card } from '@shopify/polaris';
+import { useSetIndexFiltersMode, useIndexResourceState } from '@shopify/polaris';
+import { useUrlParams } from '../hooks/useUrlParams';
+import { debounce, isEqual } from '../utils/helpers';
 
 import type {
   ListTableProps,
@@ -10,12 +10,17 @@ import type {
   ListTableView,
   ListTableChildProps,
   ListTableData,
-} from "./types";
-import type { FilterValue, SortDefinition } from "../types";
-import { ListTableFilters } from "./ListTableFilters";
-import { ListTableContent } from "./ListTableContent";
-import { buildUrl, objectToFilters, parseUrlParams, serializeToUrlParams } from "../utils/buildUrl";
-import { sortToPolaris, polarisToSort, filterItemsLocally, areFiltersEmpty } from "../utils/filters";
+} from './types';
+import type { FilterValue, SortDefinition } from '../types';
+import { ListTableFilters } from './ListTableFilters';
+import { ListTableContent } from './ListTableContent';
+import { buildUrl, objectToFilters, parseUrlParams, serializeToUrlParams } from '../utils/buildUrl';
+import {
+  sortToPolaris,
+  polarisToSort,
+  filterItemsLocally,
+  areFiltersEmpty,
+} from '../utils/filters';
 
 const DEFAULT_LIMIT = 50;
 
@@ -27,8 +32,8 @@ const abortControllers: Record<string, AbortController> = {};
  */
 const defaultT = (key: string, params?: Record<string, unknown>): string => {
   const translations: Record<string, string> = {
-    "filter-items": "Filter items",
-    "page-totalpage": params ? `${params.page} of ${params.totalPage}` : "",
+    'filter-items': 'Filter items',
+    'page-totalpage': params ? `${params.page} of ${params.totalPage}` : '',
   };
   return translations[key] || key;
 };
@@ -118,7 +123,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
     }
     return {
       page: 1,
-      queryValue: "",
+      queryValue: '',
       filterValues: {} as Record<string, FilterValue>,
       sort: defaultSort || null,
       viewSelected: null as string | null,
@@ -130,7 +135,9 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
   // Core state
   const [page, setPage] = useState(initialState.page);
   const [queryValue, setQueryValue] = useState(initialState.queryValue);
-  const [filterValues, setFilterValues] = useState<Record<string, FilterValue>>(initialState.filterValues);
+  const [filterValues, setFilterValues] = useState<Record<string, FilterValue>>(
+    initialState.filterValues
+  );
   const [sortState, setSortState] = useState<SortDefinition | null>(initialState.sort);
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -147,20 +154,19 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
   // Polaris hooks
   const { mode, setMode } = useSetIndexFiltersMode();
   const resourceIDResolver = useCallback(
-    (item: T) => (item as T & { id?: string; _id?: string }).id || (item as T & { _id?: string })._id || "",
+    (item: T) =>
+      (item as T & { id?: string; _id?: string }).id || (item as T & { _id?: string })._id || '',
     []
   );
-  const {
-    selectedResources,
-    allResourcesSelected,
-    handleSelectionChange,
-    clearSelection,
-  } = useIndexResourceState(items as unknown as { id: string }[], { resourceIDResolver: resourceIDResolver as (item: { id: string }) => string });
+  const { selectedResources, allResourcesSelected, handleSelectionChange, clearSelection } =
+    useIndexResourceState(items as unknown as { id: string }[], {
+      resourceIDResolver: resourceIDResolver as (item: { id: string }) => string,
+    });
 
   // Initialize views
   useEffect(() => {
     const initViews = async () => {
-      let views: ListTableView[] = [{ name: "All", filters: {} }, ...defaultViews];
+      let views: ListTableView[] = [{ name: 'All', filters: {} }, ...defaultViews];
 
       if (propsViews !== undefined) {
         views = [...views, ...propsViews];
@@ -172,12 +178,12 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
             views = [...views, ...data.items];
           }
         } catch (err) {
-          console.error("===> Error loading views:", err);
+          console.error('===> Error loading views:', err);
         }
       }
 
       // Find selected view from URL
-      const viewSelected = searchParams.get("viewSelected");
+      const viewSelected = searchParams.get('viewSelected');
       const selectedIndex = viewSelected
         ? views.findIndex((v) => v.name === viewSelected || v._id === viewSelected)
         : 0;
@@ -198,7 +204,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
       return;
     }
 
-    const debouncedSync = lodash.debounce(() => {
+    const debouncedSync = debounce(() => {
       setSearchParams((prev) =>
         serializeToUrlParams(
           {
@@ -215,7 +221,16 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
     debouncedSync();
     return () => debouncedSync.cancel();
-  }, [page, sortState, queryValue, filterValues, state.selected, state.views, syncWithUrl, setSearchParams]);
+  }, [
+    page,
+    sortState,
+    queryValue,
+    filterValues,
+    state.selected,
+    state.views,
+    syncWithUrl,
+    setSearchParams,
+  ]);
 
   // Abort previous request
   const abortRequest = useCallback(() => {
@@ -251,12 +266,23 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
         total: data.total || 0,
       };
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
+      if ((err as Error).name === 'AbortError') {
         return null;
       }
       throw err;
     }
-  }, [endpoint, page, limit, sortState, filterValues, queryValue, queryKey, abbreviated, fetchFn, abortRequest]);
+  }, [
+    endpoint,
+    page,
+    limit,
+    sortState,
+    filterValues,
+    queryValue,
+    queryKey,
+    abbreviated,
+    fetchFn,
+    abortRequest,
+  ]);
 
   // Fetch local data
   const fetchLocalData = useCallback(() => {
@@ -295,7 +321,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
         setFirstLoad(false);
       }
     } catch (err) {
-      console.error("===> Error fetching data:", err);
+      console.error('===> Error fetching data:', err);
       setError(err as Error);
       setLoading(false);
       setFirstLoad(false);
@@ -304,7 +330,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
   // Fetch on dependencies change
   useEffect(() => {
-    const debouncedFetch = lodash.debounce(fetchData, 100);
+    const debouncedFetch = debounce(fetchData, 100);
     debouncedFetch();
     return () => {
       debouncedFetch.cancel();
@@ -329,7 +355,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
     onDataChange?.(data);
     externalSetListTableData?.((prev) => {
-      if (lodash.isEqual(prev, data)) return prev;
+      if (isEqual(prev, data)) return prev;
       return data;
     });
   }, [
@@ -349,11 +375,14 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
   // Sort helpers
   const sort = useMemo(() => sortToPolaris(sortState), [sortState]);
-  const setSort = useCallback((selected: string[]) => {
-    const newSort = polarisToSort(selected);
-    setSortState(newSort);
-    clearSelection();
-  }, [clearSelection]);
+  const setSort = useCallback(
+    (selected: string[]) => {
+      const newSort = polarisToSort(selected);
+      setSortState(newSort);
+      clearSelection();
+    },
+    [clearSelection]
+  );
 
   // Action handlers
   const handleSetPage = useCallback(
@@ -382,12 +411,9 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
     [clearSelection]
   );
 
-  const handleSetSelectedView = useCallback(
-    (index: number) => {
-      setState((prev) => ({ ...prev, selected: index }));
-    },
-    []
-  );
+  const handleSetSelectedView = useCallback((index: number) => {
+    setState((prev) => ({ ...prev, selected: index }));
+  }, []);
 
   // View CRUD handlers
   const handleCreateView = useCallback(
@@ -396,13 +422,18 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
       if (!localData && viewsEndpoint) {
         try {
-          await fetchFn(`${viewsEndpoint}?path=${location.pathname}&action=create&name=${encodeURIComponent(name)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newView.filters),
-          });
+          await fetchFn(
+            `${viewsEndpoint}?path=${location.pathname}&action=create&name=${encodeURIComponent(
+              name
+            )}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newView.filters),
+            }
+          );
         } catch (err) {
-          console.error("===> Error creating view:", err);
+          console.error('===> Error creating view:', err);
         }
       }
 
@@ -424,7 +455,11 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
         if (!localData && viewsEndpoint) {
           const oldName = prev.views[index].name;
-          fetchFn(`${viewsEndpoint}?path=${location.pathname}&action=rename&oldName=${encodeURIComponent(oldName)}&newName=${encodeURIComponent(name)}`);
+          fetchFn(
+            `${viewsEndpoint}?path=${location.pathname}&action=rename&oldName=${encodeURIComponent(
+              oldName
+            )}&newName=${encodeURIComponent(name)}`
+          );
         }
 
         return { ...prev, views: newViews };
@@ -440,11 +475,16 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
         const newView: ListTableView = { name, filters: { ...sourceView.filters } };
 
         if (!localData && viewsEndpoint) {
-          fetchFn(`${viewsEndpoint}?path=${location.pathname}&action=create&name=${encodeURIComponent(name)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newView.filters),
-          });
+          fetchFn(
+            `${viewsEndpoint}?path=${location.pathname}&action=create&name=${encodeURIComponent(
+              name
+            )}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newView.filters),
+            }
+          );
         }
 
         return {
@@ -464,7 +504,11 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
         const newViews = prev.views.filter((_, i) => i !== index);
 
         if (!localData && viewsEndpoint) {
-          fetchFn(`${viewsEndpoint}?path=${location.pathname}&action=delete&name=${encodeURIComponent(deletedView.name)}`);
+          fetchFn(
+            `${viewsEndpoint}?path=${location.pathname}&action=delete&name=${encodeURIComponent(
+              deletedView.name
+            )}`
+          );
         }
 
         return {
@@ -476,7 +520,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
       // Clear filters when deleting view
       handleSetFilterValues({});
-      setQueryValue("");
+      setQueryValue('');
     },
     [localData, viewsEndpoint, fetchFn, handleSetFilterValues]
   );
@@ -489,11 +533,16 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
       if (!localData && viewsEndpoint) {
         const viewName = prev.views[prev.selected].name;
-        fetchFn(`${viewsEndpoint}?path=${location.pathname}&action=update&name=${encodeURIComponent(viewName)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...filterValues, queryValue }),
-        });
+        fetchFn(
+          `${viewsEndpoint}?path=${location.pathname}&action=update&name=${encodeURIComponent(
+            viewName
+          )}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...filterValues, queryValue }),
+          }
+        );
       }
 
       return { ...prev, views: newViews };
@@ -550,9 +599,7 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
   if (error) {
     return (
       <Card>
-        <div style={{ padding: "20px", color: "red" }}>
-          Error: {error.message}
-        </div>
+        <div style={{ padding: '20px', color: 'red' }}>Error: {error.message}</div>
       </Card>
     );
   }
@@ -588,4 +635,3 @@ export function ListTable<T = unknown>(props: ListTableProps<T>) {
 
   return <BlockStack>{content}</BlockStack>;
 }
-
