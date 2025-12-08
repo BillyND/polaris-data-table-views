@@ -1,6 +1,6 @@
 {
   "name": "@billynd/polaris-data-table-views",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "A complete data table component for Shopify Polaris IndexTable with filtering, sorting, pagination, URL sync, and view management. Optimized bundle size with zero external dependencies.",
   "main": "dist/index.client.js",
   "module": "dist/index.client.mjs",
