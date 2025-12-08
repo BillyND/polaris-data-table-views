@@ -129,17 +129,19 @@ export function useDataSource<T = any>({
   const updateSearchParams = useCallback(
     (updates: Record<string, string | null>) => {
       if (typeof window === 'undefined' || !syncWithUrl) return;
-      const searchParams = new URLSearchParams(window.location.search);
+      // Clear all params first, then apply updates
+      const searchParams = new URLSearchParams();
+
       Object.entries(updates).forEach(([key, value]) => {
-        if (value === null) {
-          searchParams.delete(key);
-        } else {
+        if (value !== null) {
           searchParams.set(key, value);
         }
       });
+
       const newUrl = `${window.location.pathname}${
         searchParams.toString() ? `?${searchParams.toString()}` : ''
       }`;
+
       window.history.replaceState({}, '', newUrl);
     },
     [syncWithUrl]
@@ -238,12 +240,22 @@ export function useDataSource<T = any>({
     });
 
     Object.entries(filterValues).forEach(([key, value]) => {
-      if (key !== 'queryValue' && value !== undefined && value !== '') {
-        if (Array.isArray(value) && value.length > 0) {
-          updates[`filter_${key}`] = JSON.stringify(value);
-        } else if (typeof value === 'string' && value) {
-          updates[`filter_${key}`] = encodeURIComponent(value);
-        }
+      if (key === 'queryValue') return;
+
+      const filterKey = `filter_${key}`;
+
+      // Only add non-empty array values
+      if (Array.isArray(value) && value.length > 0) {
+        updates[filterKey] = JSON.stringify(value);
+      }
+      // Only add non-empty string values
+      else if (typeof value === 'string' && value) {
+        updates[filterKey] = encodeURIComponent(value);
+      }
+      // For empty values (empty array, null, undefined, empty string, etc.),
+      // explicitly set to null to ensure removal from URL
+      else {
+        updates[filterKey] = null;
       }
     });
 
