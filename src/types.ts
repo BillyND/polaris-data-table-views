@@ -84,3 +84,20 @@ export type ListTableState = {
   selected: number;
   error?: Error;
 };
+
+export interface QueryUrlOptions {
+  /** Page number */
+  page?: number;
+  /** Items per page */
+  limit?: number;
+  /** Sort field and direction: "field|asc" or "field|desc" */
+  sort?: string;
+  /** Filter strings in format: "field|type|operator|value" or "field|value" */
+  filters?: string[];
+  /** Item ID for fetchItem */
+  id?: string;
+  /** Skip pagination and return all results */
+  export?: boolean;
+  /** Return only count, no items */
+  countOnly?: boolean;
+}

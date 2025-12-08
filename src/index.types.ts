@@ -4,6 +4,7 @@ export type {
   ListTableView,
   ListTableFilter,
   ListTableState,
+  QueryUrlOptions,
 } from './types';
 
 export { VIEW_ACTIONS } from './types';

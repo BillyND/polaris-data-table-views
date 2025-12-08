@@ -1,25 +1,23 @@
-import { useState, useEffect, useCallback } from "react";
-import { BlockStack, Card } from "@shopify/polaris";
-import withDataSource from "../hoc/withDataSource";
-import type { ListTableProps, ListTableState, ListTableData, ListTableView } from "../types";
-import { ListTableFilters } from "./ListTableFilters";
-import { ListTableContent } from "./ListTableContent";
-import { defaultFetch } from "../utils/defaultFetch";
-import lodash from "lodash";
+import { useState, useEffect, useCallback } from 'react';
+import { BlockStack, Card } from '@shopify/polaris';
+import withDataSource from '../hoc/withDataSource';
+import type { ListTableProps, ListTableState, ListTableData, ListTableView } from '../types';
+import { ListTableFilters } from './ListTableFilters';
+import { ListTableContent } from './ListTableContent';
+import { defaultFetch } from '../utils/defaultFetch';
+import { debounce, isEqual, isEmpty } from '../utils/helpers';
 
 function ListTableComponent<T = any>(props: ListTableProps<T>) {
   // URL param handling for view selection
   const getSearchParams = useCallback(() => {
-    if (typeof window === "undefined") return new URLSearchParams();
+    if (typeof window === 'undefined') return new URLSearchParams();
     return new URLSearchParams(window.location.search);
   }, []);
 
   const getSelectedView = useCallback(
     (views: ListTableView[]) => {
-      const viewSelected = getSearchParams().get("viewSelected");
-      return views?.findIndex(
-        (view) => view.name === viewSelected || view._id === viewSelected
-      );
+      const viewSelected = getSearchParams().get('viewSelected');
+      return views?.findIndex((view) => view.name === viewSelected || view._id === viewSelected);
     },
     [getSearchParams]
   );
@@ -74,33 +72,32 @@ function ListTableComponent<T = any>(props: ListTableProps<T>) {
   useEffect(() => {
     if (propsViews === undefined && !onlyLocalData && viewsEndpoint) {
       // Fetch saved views
-      effectiveFetchFunction(`${viewsEndpoint}?path=${typeof window !== "undefined" ? window.location.pathname : ""}`)
+      effectiveFetchFunction(
+        `${viewsEndpoint}?path=${typeof window !== 'undefined' ? window.location.pathname : ''}`
+      )
         .then((response) => response.json())
         .then(({ items }) =>
           setState((prev) => ({
             ...prev,
             views: [
-              { name: "All", filters: { queryValue: "" } },
+              { name: 'All', filters: { queryValue: '' } },
               ...(defaultViews || []),
               ...items,
             ],
           }))
         )
         .catch((error) => {
-          console.error("Error fetching views:", error);
+          console.error('Error fetching views:', error);
           setState((prev) => ({
             ...prev,
-            views: [
-              { name: "All", filters: { queryValue: "" } },
-              ...(defaultViews || []),
-            ],
+            views: [{ name: 'All', filters: { queryValue: '' } }, ...(defaultViews || [])],
           }));
         });
     } else {
       setState((prev) => ({
         ...prev,
         views: [
-          { name: "All", filters: { queryValue: "" } },
+          { name: 'All', filters: { queryValue: '' } },
           ...(defaultViews || []),
           ...(propsViews || []),
         ],
@@ -114,7 +111,7 @@ function ListTableComponent<T = any>(props: ListTableProps<T>) {
       return;
     }
 
-    const debounceUpdateTableData = lodash.debounce(() => {
+    const debounceUpdateTableData = debounce(() => {
       const newData: ListTableData<T> = {
         items,
         selectedResources,
@@ -130,7 +127,7 @@ function ListTableComponent<T = any>(props: ListTableProps<T>) {
 
       if (setListTableData) {
         setListTableData((prev: ListTableData<T>) => {
-          const canUpdate = !lodash.isEqual(
+          const canUpdate = !isEqual(
             {
               items: prev.items,
               selectedResources: prev.selectedResources,
@@ -185,13 +182,11 @@ function ListTableComponent<T = any>(props: ListTableProps<T>) {
   const error = state.error || propsError;
 
   // Check if empty state should be shown
-  const showEmptyState = !total && !loading && lodash.isEmpty(filterValues);
+  const showEmptyState = !total && !loading && isEmpty(filterValues);
 
   if (error) {
     return (
-      <div style={{ padding: "20px", color: "red" }}>
-        Error: {error.message || String(error)}
-      </div>
+      <div style={{ padding: '20px', color: 'red' }}>Error: {error.message || String(error)}</div>
     );
   }
 
@@ -223,7 +218,7 @@ const ListTableWithErrorBoundary = <T = any,>(props: ListTableProps<T>) => {
 
   if (displayError) {
     return (
-      <div style={{ padding: "20px", color: "red" }}>
+      <div style={{ padding: '20px', color: 'red' }}>
         Error: {displayError.message || String(displayError)}
       </div>
     );
@@ -235,16 +230,14 @@ const ListTableWithErrorBoundary = <T = any,>(props: ListTableProps<T>) => {
     if (err instanceof Error) {
       setError(err);
       return (
-        <div style={{ padding: "20px", color: "red" }}>
-          Error: {err.message || String(err)}
-        </div>
+        <div style={{ padding: '20px', color: 'red' }}>Error: {err.message || String(err)}</div>
       );
     }
     // For unknown error types
     const unknownError = new Error(String(err));
     setError(unknownError);
     return (
-      <div style={{ padding: "20px", color: "red" }}>
+      <div style={{ padding: '20px', color: 'red' }}>
         Error: {unknownError.message || String(unknownError)}
       </div>
     );
@@ -255,4 +248,3 @@ const ListTableWithErrorBoundary = <T = any,>(props: ListTableProps<T>) => {
 const ListTable = withDataSource(ListTableWithErrorBoundary as any);
 
 export default ListTable;
-

@@ -4,8 +4,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { ListTableFilter, ListTableProps, ListTableState, ListTableView } from '../types';
 import { VIEW_ACTIONS } from '../types';
 import { defaultFetch } from '../utils/defaultFetch';
-import { defaultT } from '../utils/helpers';
-import lodash from 'lodash';
+import { defaultT, isEqual } from '../utils/helpers';
 
 export function ListTableFilters(
   props: ListTableProps,
@@ -272,7 +271,7 @@ export function ListTableFilters(
     const { views, selected } = state;
     const { filterValues: newFilters } = props;
     const currentFilters = [...views][selected]?.filters || {};
-    const disabled = lodash.isEqual(currentFilters, newFilters);
+    const disabled = isEqual(currentFilters, newFilters);
 
     return selected === 0
       ? {

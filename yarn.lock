@@ -534,11 +534,6 @@ mongodb@~6.20.0:
     bson "^6.10.4"
     mongodb-connection-string-url "^3.0.2"
 
-mongoose-url-query@^1.6.3:
-  version "1.6.3"
-  resolved "https://registry.yarnpkg.com/mongoose-url-query/-/mongoose-url-query-1.6.3.tgz#f00741205f8466778721f4ed103dc7964cba225b"
-  integrity sha512-5TbYNmc67mF2Uvr7HCadYO8IfC5oNaZt2GWzDd+tix2krd5YUcUpyO4KmPXh9gL0ecAHw9xOdcoA4B59akMWYw==
-
 mongoose@^8.0.0:
   version "8.20.2"
   resolved "https://registry.yarnpkg.com/mongoose/-/mongoose-8.20.2.tgz#387ce5645cb283fb503f3fd94f607200ef96b256"

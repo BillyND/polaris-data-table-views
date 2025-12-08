@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { useSetIndexFiltersMode } from '@shopify/polaris';
 import { TABLE_ITEM_LIST_LIMITATION } from '../index.constants';
 import { defaultFetch } from '../utils/defaultFetch';
-import { buildQueryUrl } from 'mongoose-url-query';
-import lodash from 'lodash';
+import { debounce, buildQueryUrl } from '../utils/helpers';
 import type { IndexFiltersProps } from '@shopify/polaris';
 import { usePagination } from './usePagination';
 
@@ -258,7 +257,7 @@ export function useDataSource<T = any>({
       return;
     }
 
-    const debouncedUpdate = lodash.debounce(() => {
+    const debouncedUpdate = debounce(() => {
       updateSearchParamsFromState();
     }, 100);
 

@@ -1,7 +1,7 @@
 {
   "name": "@billynd/polaris-data-table-views",
-  "version": "1.2.3",
-  "description": "A complete data table component for Shopify Polaris IndexTable with filtering, sorting, pagination, URL sync, and view management. Integrates with mongoose-url-query.",
+  "version": "1.2.4",
+  "description": "A complete data table component for Shopify Polaris IndexTable with filtering, sorting, pagination, URL sync, and view management. Optimized bundle size with zero external dependencies.",
   "main": "dist/index.client.js",
   "module": "dist/index.client.mjs",
   "types": "dist/index.client.d.ts",
@@ -88,13 +88,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {
-    "lodash": "^4.17.21",
-    "mongoose-url-query": "^1.6.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@shopify/polaris": "13.9.0",
-    "@types/lodash": "^4.17.0",
     "@types/node": "^20.0.0",
     "@types/react": "18.3.12",
     "mongoose": "^8.0.0",
