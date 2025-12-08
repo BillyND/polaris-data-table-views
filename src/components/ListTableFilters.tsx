@@ -31,7 +31,6 @@ export function ListTableFilters(
 
   // Support both fetchFn and fetchFunction (fetchFn takes precedence)
   const effectiveFetchFunction = fetchFn || fetchFunction || defaultFetch;
-  console.log('effectiveFetchFunction', effectiveFetchFunction);
   const { selected } = state;
 
   // Declare all the function handlers first
@@ -67,12 +66,12 @@ export function ListTableFilters(
   };
 
   const setSelectedView = (selected: number) => {
-    // Get viewNameOrId from views before state update (setState is async)
-    const viewNameOrId = state.views[selected]?._id || state.views[selected]?.name;
+    // Get full view item before state update (setState is async)
+    const selectedView = state.views[selected] || null;
     setState({ ...state, selected });
 
     if (setViewSelected) {
-      setViewSelected(viewNameOrId || null);
+      setViewSelected(selectedView);
     } else {
       console.error('===> setViewSelected is not available in props');
     }

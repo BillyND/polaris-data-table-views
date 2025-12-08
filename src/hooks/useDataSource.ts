@@ -67,8 +67,7 @@ export interface UseDataSourceReturn<T> {
   setFilters: (filters: Record<string, any>) => void;
   clearFilters: () => void;
   setSort: (sort: SortDefinition | null) => void;
-  setSelectedView: (index: number) => void;
-  setViewSelected: (viewNameOrId: string | null) => void;
+  setViewSelected: (view: ViewDefinition | null) => void;
   refresh: () => void;
 
   // Polaris helpers
@@ -131,6 +130,7 @@ export function useDataSource<T = any>({
       if (typeof window === 'undefined' || !syncWithUrl) return;
       // Clear all params first, then apply updates
       const searchParams = new URLSearchParams();
+      console.log('===> updates before', updates);
 
       Object.entries(updates).forEach(([key, value]) => {
         if (value !== null) {
@@ -141,6 +141,8 @@ export function useDataSource<T = any>({
       const newUrl = `${window.location.pathname}${
         searchParams.toString() ? `?${searchParams.toString()}` : ''
       }`;
+
+      console.log('===> newUrl', newUrl);
 
       window.history.replaceState({}, '', newUrl);
     },
@@ -204,63 +206,76 @@ export function useDataSource<T = any>({
   const isInitialMount = useRef(true);
 
   // Unified function to update URL search params from current state
-  const updateSearchParamsFromState = useCallback(() => {
-    if (!syncWithUrl) return;
-    const updates: Record<string, string | null> = {};
+  const updateSearchParamsFromState = useCallback(
+    ({
+      page,
+      sort,
+      filterValues,
+      viewSelected,
+    }: {
+      page: number;
+      sort: string[];
+      filterValues: Record<string, any>;
+      viewSelected: string | null;
+    }) => {
+      if (!syncWithUrl) return;
+      const updates: Record<string, string | null> = {};
 
-    if (page > 1) {
-      updates.page = page.toString();
-    } else {
-      updates.page = null;
-    }
-
-    if (sort?.length) {
-      updates.sort = sort[0].replace(' ', '|');
-    } else {
-      updates.sort = null;
-    }
-
-    if (filterValues.queryValue) {
-      updates.query = encodeURIComponent(filterValues.queryValue);
-    } else {
-      updates.query = null;
-    }
-
-    if (viewSelected) {
-      updates.viewSelected = viewSelected;
-    } else {
-      updates.viewSelected = null;
-    }
-
-    const currentParams = getSearchParams();
-    currentParams.forEach((_, key) => {
-      if (key.startsWith('filter_')) {
-        updates[key] = null;
+      if (page > 1) {
+        updates.page = page.toString();
+      } else {
+        updates.page = null;
       }
-    });
 
-    Object.entries(filterValues).forEach(([key, value]) => {
-      if (key === 'queryValue') return;
-
-      const filterKey = `filter_${key}`;
-
-      // Only add non-empty array values
-      if (Array.isArray(value) && value.length > 0) {
-        updates[filterKey] = JSON.stringify(value);
+      if (sort?.length) {
+        updates.sort = sort[0].replace(' ', '|');
+      } else {
+        updates.sort = null;
       }
-      // Only add non-empty string values
-      else if (typeof value === 'string' && value) {
-        updates[filterKey] = encodeURIComponent(value);
-      }
-      // For empty values (empty array, null, undefined, empty string, etc.),
-      // explicitly set to null to ensure removal from URL
-      else {
-        updates[filterKey] = null;
-      }
-    });
 
-    updateSearchParams(updates);
-  }, [page, sort, filterValues, viewSelected, getSearchParams, updateSearchParams, syncWithUrl]);
+      if (filterValues.queryValue) {
+        updates.query = encodeURIComponent(filterValues.queryValue);
+      } else {
+        updates.query = null;
+      }
+
+      if (viewSelected) {
+        updates.viewSelected = viewSelected;
+      } else {
+        updates.viewSelected = null;
+      }
+
+      const currentParams = getSearchParams();
+      currentParams.forEach((_, key) => {
+        if (key.startsWith('filter_')) {
+          updates[key] = null;
+        }
+      });
+
+      Object.entries(filterValues).forEach(([key, value]) => {
+        if (key === 'queryValue') return;
+
+        const filterKey = `filter_${key}`;
+
+        // Only add non-empty array values
+        if (Array.isArray(value) && value.length > 0) {
+          updates[filterKey] = JSON.stringify(value);
+        }
+        // Only add non-empty string values
+        else if (typeof value === 'string' && value) {
+          updates[filterKey] = encodeURIComponent(value);
+        }
+        // For empty values (empty array, null, undefined, empty string, etc.),
+        // explicitly set to null to ensure removal from URL
+        else {
+          updates[filterKey] = null;
+        }
+      });
+
+      updateSearchParams(updates);
+    },
+    [getSearchParams, updateSearchParams, syncWithUrl]
+  );
 
   // Watch state changes and update URL params (debounced)
   useEffect(() => {
@@ -270,7 +285,12 @@ export function useDataSource<T = any>({
     }
 
     const debouncedUpdate = debounce(() => {
-      updateSearchParamsFromState();
+      updateSearchParamsFromState({
+        page,
+        sort: sort || [],
+        filterValues,
+        viewSelected,
+      });
     }, 100);
 
     debouncedUpdate();
@@ -489,9 +509,6 @@ export function useDataSource<T = any>({
     return () => abortRequest(endpoint);
   }, [refreshTrigger, endpoint, fetchData, abortRequest]);
 
-  // UI state handlers
-  const filters = useSetIndexFiltersMode();
-
   // Handler functions
   const handleSetSort = useCallback((newSort: string[]) => {
     setSortState(newSort);
@@ -522,9 +539,9 @@ export function useDataSource<T = any>({
 
   const setFilters = useCallback(
     (filters: Record<string, any>) => {
-      handleSetFilterValues({ ...filterValues, ...filters });
+      handleSetFilterValues({ ...filters });
     },
-    [filterValues, handleSetFilterValues]
+    [handleSetFilterValues]
   );
 
   const clearFilters = useCallback(() => {
@@ -542,20 +559,14 @@ export function useDataSource<T = any>({
     [handleSetSort]
   );
 
-  const setSelectedView = useCallback(
-    (index: number) => {
-      const view = defaultViews[index];
-      if (view) {
-        setViewSelectedState(view.name);
-        handleSetFilterValues(view.filters);
-      }
+  const setViewSelected = useCallback(
+    (view: ViewDefinition | null) => {
+      const viewId = view ? view._id || view.name : null;
+      setViewSelectedState(viewId);
+      handleSetFilterValues(view?.filters || { queryValue: '' });
     },
-    [defaultViews, handleSetFilterValues]
+    [handleSetFilterValues]
   );
-
-  const setViewSelected = useCallback((viewNameOrId: string | null) => {
-    setViewSelectedState(viewNameOrId);
-  }, []);
 
   const refresh = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1);
@@ -565,8 +576,8 @@ export function useDataSource<T = any>({
   const tabs = defaultViews.map((view, index) => ({
     content: view.name,
     index,
-    id: (view?._id || view?.name) ?? '',
-    onAction: () => setSelectedView(index),
+    id: view._id || view.name,
+    onAction: () => setViewSelected(view),
   }));
 
   // Convert sort to Polaris format
@@ -607,7 +618,6 @@ export function useDataSource<T = any>({
     setFilters,
     clearFilters,
     setSort,
-    setSelectedView,
     setViewSelected,
     refresh,
     tabs,

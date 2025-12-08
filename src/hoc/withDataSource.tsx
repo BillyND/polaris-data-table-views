@@ -55,7 +55,7 @@ export type WithDataSourceChildProps = {
   /**
    * Function to update viewSelected in URL params
    */
-  setViewSelected: (viewNameOrId: string | null) => void;
+  setViewSelected: (view: { _id?: string; name: string; filters: { queryValue?: string; [key: string]: any } } | null) => void;
   /**
    * Object returned by calling the function `useSetIndexFiltersMode`
    */
