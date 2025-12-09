@@ -11,8 +11,8 @@
  * Example:
  * ```typescript
  * // ✅ Server-side (API route, Express handler, etc.)
- * import { serverGetViews, serverCreateView } from '@billynd/polaris-data-table-views/server/views';
- * import { ViewModel } from '@billynd/polaris-data-table-views/models/View';
+ * import { serverGetViews, serverCreateView } from '@peakify/polaris-data-table-views/server/views';
+ * import { ViewModel } from '@peakify/polaris-data-table-views/models/View';
  *
  * app.get('/api/views', async (req, res) => {
  *   const views = await serverGetViews('/admin/users', ViewModel, req.user.id);

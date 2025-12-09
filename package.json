@@ -1,6 +1,6 @@
 {
-  "name": "@billynd/polaris-data-table-views",
-  "version": "1.3.5",
+  "name": "@peakify/polaris-data-table-views",
+  "version": "1.4.1",
   "description": "A complete data table component for Shopify Polaris IndexTable with filtering, sorting, pagination, URL sync, and view management. Optimized bundle size with zero external dependencies.",
   "main": "dist/index.client.js",
   "module": "dist/index.client.mjs",
@@ -69,6 +69,14 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BillyND/polaris-data-table-views.git"
+  },
+  "homepage": "https://github.com/BillyND/polaris-data-table-views#readme",
+  "bugs": {
+    "url": "https://github.com/BillyND/polaris-data-table-views/issues"
+  },
   "peerDependencies": {
     "@shopify/polaris": "^12.0.0 || ^13.0.0",
     "react": "^18.0.0",

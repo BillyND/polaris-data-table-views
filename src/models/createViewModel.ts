@@ -9,7 +9,7 @@
  *
  * @example
  * ```typescript
- * import { createViewModel } from '@billynd/polaris-data-table-views/models/createViewModel';
+ * import { createViewModel } from '@peakify/polaris-data-table-views/models/createViewModel';
  * import { Schema } from 'mongoose';
  *
  * // Create custom model with additional fields
@@ -127,7 +127,7 @@ export function createBaseViewIndexes(schema: Schema) {
  *
  * @example
  * ```typescript
- * import { createViewModel } from '@billynd/polaris-data-table-views/server';
+ * import { createViewModel } from '@peakify/polaris-data-table-views/server';
  * import { Schema } from 'mongoose';
  *
  * // Basic usage with default settings

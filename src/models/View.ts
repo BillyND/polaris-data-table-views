@@ -12,7 +12,7 @@
  * Usage:
  * ```typescript
  * // ✅ Server-side only (API route, Express handler, etc.)
- * import { ViewModel } from '@billynd/polaris-data-table-views/models/View';
+ * import { ViewModel } from '@peakify/polaris-data-table-views/models/View';
  *
  * // In your server-side code
  * const views = await ViewModel.find({ path: '/admin/users' });
@@ -20,7 +20,7 @@
  *
  * For custom models, use the factory function:
  * ```typescript
- * import { createViewModel } from '@billynd/polaris-data-table-views/models/createViewModel';
+ * import { createViewModel } from '@peakify/polaris-data-table-views/models/createViewModel';
  *
  * const CustomViewModel = createViewModel({
  *   modelName: 'CustomView',
@@ -89,7 +89,7 @@ ViewSchema.index(
  * @example
  * ```typescript
  * // In your server-side API route
- * import { ViewModel } from '@billynd/polaris-data-table-views/models/View';
+ * import { ViewModel } from '@peakify/polaris-data-table-views/models/View';
  *
  * const views = await ViewModel.find({ path: '/admin/users' });
  * ```

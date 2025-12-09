@@ -1,12 +1,12 @@
-# @billynd/polaris-data-table-views
+# @peakify/polaris-data-table-views
 
-[![npm version](https://img.shields.io/npm/v/@billynd/polaris-data-table-views.svg)](https://www.npmjs.com/package/@billynd/polaris-data-table-views)
+[![npm version](https://img.shields.io/npm/v/@peakify/polaris-data-table-views.svg)](https://www.npmjs.com/package/@peakify/polaris-data-table-views)
 
-[![npm downloads](https://img.shields.io/npm/dm/@billynd/polaris-data-table-views.svg)](https://www.npmjs.com/package/@billynd/polaris-data-table-views)
+[![npm downloads](https://img.shields.io/npm/dm/@peakify/polaris-data-table-views.svg)](https://www.npmjs.com/package/@peakify/polaris-data-table-views)
 
-[![license](https://img.shields.io/npm/l/@billynd/polaris-data-table-views.svg)](https://github.com/BillyND/polaris-list-table/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@peakify/polaris-data-table-views.svg)](https://github.com/BillyND/polaris-list-table/blob/main/LICENSE)
 
-A complete data table component library for Shopify Polaris IndexTable with filtering, sorting, pagination, URL synchronization, and view management. Integrates seamlessly with `@billy/mongoose-url-query` for server-side data fetching.
+A complete data table component library for Shopify Polaris IndexTable with filtering, sorting, pagination, URL synchronization, and view management. Integrates seamlessly with `@peakify/mongoose-url-query` for server-side data fetching.
 
 ## Table of Contents
 
@@ -34,9 +34,9 @@ A complete data table component library for Shopify Polaris IndexTable with filt
 ## Installation
 
 ```bash
-npm install @billynd/polaris-data-table-views
+npm install @peakify/polaris-data-table-views
 # or
-yarn add @billynd/polaris-data-table-views
+yarn add @peakify/polaris-data-table-views
 ```
 
 ### Peer Dependencies
@@ -52,7 +52,7 @@ This library requires:
 ### 1. Basic Remote Data Table
 
 ```tsx
-import { ListTable } from '@billynd/polaris-data-table-views';
+import { ListTable } from '@peakify/polaris-data-table-views';
 import { IndexTable } from '@shopify/polaris';
 
 function UsersPage() {
@@ -78,7 +78,7 @@ function UsersPage() {
 **Client-side:**
 
 ```tsx
-import { ListTable } from '@billynd/polaris-data-table-views';
+import { ListTable } from '@peakify/polaris-data-table-views';
 
 function UsersPage() {
   return (
@@ -97,14 +97,14 @@ function UsersPage() {
 
 ```tsx
 // pages/api/views.ts (Next.js) or routes/views.js (Express)
-import { ViewModel } from '@billynd/polaris-data-table-views/server';
+import { ViewModel } from '@peakify/polaris-data-table-views/server';
 import {
   serverGetViews,
   serverCreateView,
   serverUpdateView,
   serverDeleteView,
   serverRenameView,
-} from '@billynd/polaris-data-table-views/server';
+} from '@peakify/polaris-data-table-views/server';
 
 export default async function handler(req, res) {
   const { path, action, name, oldName, newName } = req.query;
@@ -169,7 +169,7 @@ By default, the table state (page, sort, filters, selected view) is synchronized
 ### Basic Usage with Remote Data
 
 ```tsx
-import { ListTable } from '@billynd/polaris-data-table-views';
+import { ListTable } from '@peakify/polaris-data-table-views';
 
 <ListTable
   endpoint="/api/products"
@@ -258,14 +258,14 @@ const customFetch = async (url: string, options?: RequestInit) => {
 
 ```tsx
 // Next.js API route example
-import { ViewModel } from '@billynd/polaris-data-table-views/server';
+import { ViewModel } from '@peakify/polaris-data-table-views/server';
 import {
   serverGetViews,
   serverCreateView,
   serverUpdateView,
   serverDeleteView,
   serverRenameView,
-} from '@billynd/polaris-data-table-views/server';
+} from '@peakify/polaris-data-table-views/server';
 
 export default async function handler(req, res) {
   const { method, query, body } = req;
@@ -370,7 +370,7 @@ import { Select } from '@shopify/polaris';
 For more control, use the hooks directly:
 
 ```tsx
-import { useDataSource } from '@billynd/polaris-data-table-views';
+import { useDataSource } from '@peakify/polaris-data-table-views';
 import { IndexTable, Card } from '@shopify/polaris';
 
 function CustomTable() {
@@ -683,7 +683,7 @@ function serverRenameView(
 Create a custom Mongoose model with additional fields:
 
 ```tsx
-import { createViewModel } from '@billynd/polaris-data-table-views/server';
+import { createViewModel } from '@peakify/polaris-data-table-views/server';
 import { Schema } from 'mongoose';
 
 const CustomViewModel = createViewModel({
@@ -780,10 +780,10 @@ const customFetch = async (url: string, options?: RequestInit) => {
 
 ```tsx
 // Main component
-import { ListTable } from '@billynd/polaris-data-table-views';
+import { ListTable } from '@peakify/polaris-data-table-views';
 
 // Hooks
-import { useDataSource, useSelection, usePagination } from '@billynd/polaris-data-table-views';
+import { useDataSource, useSelection, usePagination } from '@peakify/polaris-data-table-views';
 
 // Types
 import type {
@@ -791,26 +791,26 @@ import type {
   ListTableData,
   ListTableView,
   ListTableFilter,
-} from '@billynd/polaris-data-table-views/types';
+} from '@peakify/polaris-data-table-views/types';
 
 // Constants
-import { VIEW_ACTIONS } from '@billynd/polaris-data-table-views/types';
-import { TABLE_ITEM_LIST_LIMITATION } from '@billynd/polaris-data-table-views/constants';
+import { VIEW_ACTIONS } from '@peakify/polaris-data-table-views/types';
+import { TABLE_ITEM_LIST_LIMITATION } from '@peakify/polaris-data-table-views/constants';
 
 // Utils
-import { defaultFetch, defaultT } from '@billynd/polaris-data-table-views';
+import { defaultFetch, defaultT } from '@peakify/polaris-data-table-views';
 ```
 
 ### Server-Side Exports
 
 ```tsx
 // Models
-import { ViewModel } from '@billynd/polaris-data-table-views/server';
+import { ViewModel } from '@peakify/polaris-data-table-views/server';
 import {
   createViewModel,
   baseViewSchemaDefinition,
   createBaseViewIndexes,
-} from '@billynd/polaris-data-table-views/server';
+} from '@peakify/polaris-data-table-views/server';
 
 // Server utilities
 import {
@@ -819,7 +819,7 @@ import {
   serverUpdateView,
   serverDeleteView,
   serverRenameView,
-} from '@billynd/polaris-data-table-views/server';
+} from '@peakify/polaris-data-table-views/server';
 ```
 
 ## TypeScript Support
@@ -834,7 +834,7 @@ import type {
   QueryState,
   SortDefinition,
   ViewDefinition,
-} from '@billynd/polaris-data-table-views';
+} from '@peakify/polaris-data-table-views';
 ```
 
 ## Best Practices
